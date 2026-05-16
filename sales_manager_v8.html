@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>売上管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0e14;--bg2:#13151e;--bg3:#1b1e2a;--bg4:#22253200;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#dde1ef;--text2:#8892ab;--text3:#4a5168;
+  --teal:#3dd9cb;--teal-dim:rgba(61,217,203,0.1);
+  --gold:#f5c542;--gold-dim:rgba(245,197,66,0.1);
+  --green:#4cdb8c;--green-dim:rgba(76,219,140,0.1);
+  --red:#f06060;--red-dim:rgba(240,96,96,0.1);
+  --purple:#a78bfa;
+  --radius:10px;
+}
+html,body{height:100%;font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.6}
+
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:52px 1fr;height:100vh}
+.topbar{grid-column:1/-1;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;justify-content:space-between}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0}
+.content{overflow-y:auto;padding:24px}
+
+.logo{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--teal);letter-spacing:.05em}
+.logo em{color:var(--text3);font-style:normal}
+.topbar-right{display:flex;align-items:center;gap:10px}
+
+/* ── SIDEBAR ── */
+.nav-section{padding:8px 14px 4px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;font-weight:500}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;color:var(--text2);font-size:12px;transition:all .15s;border-left:2px solid transparent;margin:1px 0}
+.nav-item:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.nav-item.active{background:var(--teal-dim);color:var(--teal);border-left-color:var(--teal)}
+.nav-item svg{opacity:.7;flex-shrink:0}
+.nav-item.active svg{opacity:1}
+
+/* ── VIEWS ── */
+.view{display:none}
+.view.active{display:block}
+
+/* ── BUTTONS ── */
+.btn{border:none;border-radius:7px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--teal);color:#0c0e14}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{color:var(--text);border-color:var(--teal)}
+.btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(240,96,96,.25)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-icon{background:transparent;border:none;color:var(--text3);cursor:pointer;padding:4px 6px;border-radius:5px;transition:all .15s;font-size:13px}
+.btn-icon:hover{color:var(--text);background:var(--bg3)}
+
+/* ── PAGE HEADER ── */
+.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:18px;font-weight:500}
+.page-title em{font-size:12px;color:var(--text3);font-style:normal;margin-left:8px;font-family:'DM Mono',monospace}
+
+/* ── KPI CARDS ── */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.k1::before{background:var(--teal)} .kpi.k2::before{background:var(--gold)}
+.kpi.k3::before{background:var(--green)} .kpi.k4::before{background:var(--purple)}
+.kpi-lbl{font-size:11px;color:var(--text2);margin-bottom:6px}
+.kpi-val{font-family:'DM Mono',monospace;font-size:20px;font-weight:500;line-height:1;margin-bottom:3px}
+.kpi.k1 .kpi-val{color:var(--teal)} .kpi.k2 .kpi-val{color:var(--gold)}
+.kpi.k3 .kpi-val{color:var(--green)} .kpi.k4 .kpi-val{color:var(--purple)}
+.kpi-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace}
+
+/* ── CARDS ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.07em}
+.card-head .right{display:flex;align-items:center;gap:8px}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{padding:8px 12px;text-align:left;color:var(--text3);font-weight:400;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text2)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.mono{font-family:'DM Mono',monospace}
+.num{text-align:right}
+.col-amount{color:var(--teal);font-family:'DM Mono',monospace;text-align:right}
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace}
+.badge-ok{background:var(--green-dim);color:var(--green)}
+.badge-ng{background:var(--red-dim);color:var(--red)}
+.badge-mid{background:var(--gold-dim);color:var(--gold)}
+
+/* ── YEAR/MONTH TABS ── */
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:5px 14px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:11px;font-family:'DM Mono',monospace;transition:all .15s}
+.tab:hover{border-color:var(--teal);color:var(--teal)}
+.tab.active{background:var(--teal-dim);border-color:var(--teal);color:var(--teal)}
+
+/* ── MONTH BAR CHART ── */
+.barchart{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:100px;margin-bottom:6px}
+.bw{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:2px;cursor:pointer}
+.bv{font-size:8px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap}
+.bb{width:100%;border-radius:3px 3px 0 0;min-height:2px;background:rgba(61,217,203,.35);transition:background .15s}
+.bw:hover .bb,.bw.sel .bb{background:var(--teal)}
+.bw.sel .bb{background:var(--gold)}
+.blabels{display:grid;grid-template-columns:repeat(12,1fr);gap:4px}
+.bml{text-align:center;font-size:9px;color:var(--text3);font-family:'DM Mono',monospace}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:translateY(10px);transition:transform .2s}
+.overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:15px;font-weight:500;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between}
+.form-row{margin-bottom:14px}
+.form-row label{display:block;font-size:11px;color:var(--text2);margin-bottom:5px}
+.form-row input,.form-row select,.form-row textarea{
+  width:100%;background:var(--bg3);color:var(--text);border:1px solid var(--border2);
+  border-radius:7px;padding:9px 12px;font-size:13px;font-family:inherit;
+}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{outline:none;border-color:var(--teal)}
+.form-row textarea{resize:vertical;min-height:60px}
+.form-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── GRID 2COL ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:800px){.g2{grid-template-columns:1fr}}
+.g3{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:900px){.g3{grid-template-columns:1fr}}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.toolbar input{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;font-size:12px;font-family:inherit;width:200px}
+.toolbar input:focus{outline:none;border-color:var(--teal)}
+.toolbar-right{margin-left:auto;display:flex;gap:8px}
+
+/* ── CLIENT RANK ── */
+.rank-list{display:flex;flex-direction:column;gap:6px}
+.rank-item{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:6px}
+.rank-n{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;min-width:14px}
+.rank-name{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-bar-w{width:70px;height:3px;background:rgba(255,255,255,.06);border-radius:2px}
+.rank-bar{height:100%;background:var(--teal);border-radius:2px}
+.rank-amt{font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);min-width:68px;text-align:right}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--teal);color:var(--teal);padding:10px 18px;border-radius:8px;font-size:12px;z-index:999;display:none;animation:fadeUp .2s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── EMPTY STATE ── */
+.empty{text-align:center;padding:40px;color:var(--text3);font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">売上<em>マネージャー</em></div>
+  <div class="topbar-right">
+    <span id="saveIndicator" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace"></span>
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">CSVエクスポート</button>
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="nav-section">メニュー</div>
+  <div class="nav-item active" onclick="showView('dashboard',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+    ダッシュボード
+  </div>
+  <div class="nav-item" onclick="showView('transactions',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12v1.5H2zm0 4h12v1.5H2zm0 4h8v1.5H2z"/></svg>
+    売上一覧
+  </div>
+  <div class="nav-item" onclick="showView('clients',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6H2z"/></svg>
+    取引先管理
+  </div>
+  <div class="nav-section" style="margin-top:8px">表示</div>
+  <div class="nav-item" onclick="showView('monthly',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="4" width="14" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 8h14" stroke="currentColor" stroke-width="1.5"/></svg>
+    月別レポート
+  </div>
+  <div class="nav-item" onclick="showView('pipeline',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3h12M2 6h9M2 9h6M2 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="13" cy="11" r="2.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15 13l1.5 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    未確定案件
+  </div>
+  <div class="nav-item" onclick="showView('cashflow',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><polyline points="1,12 4,7 7,9 10,4 13,6 15,3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><line x1="1" y1="15" x2="15" y2="15" stroke="currentColor" stroke-width="1"/></svg>
+    キャッシュフロー
+  </div>
+  <div class="nav-item" onclick="showView('expenses',this)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="2" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M1 6h14M5 2v12M5 9h8M5 12h5" stroke="currentColor" stroke-width="1.2"/></svg>
+    費用入力
+  </div>
+</nav>
+
+<!-- CONTENT -->
+<main class="content">
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="view active" id="view-dashboard">
+    <div class="page-head">
+      <div class="page-title">ダッシュボード <em id="dashYear"></em></div>
+      <div class="tabs" id="dashYearTabs" style="margin-bottom:0"></div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi k1"><div class="kpi-lbl">年間売上合計</div><div class="kpi-val" id="dKpi1">—</div><div class="kpi-sub" id="dKpi1s">—</div></div>
+      <div class="kpi k2"><div class="kpi-lbl">取引件数</div><div class="kpi-val" id="dKpi2">—</div><div class="kpi-sub">レコード数</div></div>
+      <div class="kpi k3"><div class="kpi-lbl">月平均</div><div class="kpi-val" id="dKpi3">—</div><div class="kpi-sub">1ヶ月あたり</div></div>
+      <div class="kpi k4"><div class="kpi-lbl">最高月</div><div class="kpi-val" id="dKpi4">—</div><div class="kpi-sub" id="dKpi4s">—</div></div>
+    </div>
+    <div class="g3">
+      <div class="card">
+        <div class="card-head">月別売上 <span id="selMonthLbl" style="font-size:11px;color:var(--text3);text-transform:none;font-weight:400">月をクリックで取引先表示</span></div>
+        <div class="barchart" id="dashBars"></div>
+        <div class="blabels" id="dashBarLabels"></div>
+      </div>
+      <div class="card">
+        <div class="card-head">取引先 <span id="rankMonthLbl" style="font-size:11px;color:var(--text3);text-transform:none;font-weight:400">—</span></div>
+        <div class="rank-list" id="rankList"><div class="empty">月を選択してください</div></div>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-head">年別推移</div>
+        <canvas id="trendCanvas" height="180"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-head">最近の取引</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>日付</th><th>取引先</th><th>金額</th><th>請求</th><th>入金</th></tr></thead>
+            <tbody id="recentTbl"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TRANSACTIONS ===== -->
+  <div class="view" id="view-transactions">
+    <div class="page-head">
+      <div class="page-title">売上一覧 <em id="txCount"></em></div>
+      <button class="btn btn-primary" onclick="openTxModal()">＋ 新規登録</button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="txSearch" placeholder="検索（取引先・メモ）" oninput="renderTxTable()">
+      <select id="txYear" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;font-size:12px;font-family:inherit" onchange="renderTxTable()">
+        <option value="">すべての年</option>
+      </select>
+      <select id="txMonth" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;font-size:12px;font-family:inherit" onchange="renderTxTable()">
+        <option value="">すべての月</option>
+      </select>
+      <div class="toolbar-right">
+        <button class="btn btn-ghost btn-sm" onclick="sortTx('date')">日付順</button>
+        <button class="btn btn-ghost btn-sm" onclick="sortTx('amount')">金額順</button>
+      </div>
+    </div>
+    <!-- 月次合計サマリー -->
+    <div id="txSummary" style="display:none;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <div class="kpi k1"><div class="kpi-lbl" id="txSumLabel">期間合計</div><div class="kpi-val" id="txSumTotal" style="color:var(--teal)">—</div><div class="kpi-sub" id="txSumCount"></div></div>
+        <div class="kpi k2"><div class="kpi-lbl">入金済み</div><div class="kpi-val" id="txSumNyuukin" style="color:var(--green)">—</div><div class="kpi-sub" id="txSumNyuukinPct"></div></div>
+        <div class="kpi k3"><div class="kpi-lbl">未入金</div><div class="kpi-val" id="txSumMi" style="color:var(--red)">—</div><div class="kpi-sub" id="txSumMiCount"></div></div>
+        <div class="kpi k4"><div class="kpi-lbl">請求済み（未入金）</div><div class="kpi-val" id="txSumSeikyuu" style="color:var(--gold)">—</div><div class="kpi-sub" id="txSumSeikyuuCount"></div></div>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th onclick="sortTx('date')">日付</th>
+            <th onclick="sortTx('client')">取引先</th>
+            <th onclick="sortTx('amount')" style="text-align:right">金額</th>
+            <th>内容</th>
+            <th style="text-align:center">請求</th>
+            <th style="text-align:center">入金</th>
+            <th>メモ</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="txTableBody"></tbody>
+          <tfoot id="txTableFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CLIENTS ===== -->
+  <div class="view" id="view-clients">
+    <div class="page-head">
+      <div class="page-title">取引先管理 <em id="clientCount"></em></div>
+      <button class="btn btn-primary" onclick="openClientModal()">＋ 新規登録</button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="clientSearch" placeholder="検索" oninput="renderClientTable()">
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>取引先名</th>
+            <th style="text-align:right">累計売上</th>
+            <th style="text-align:right">取引件数</th>
+            <th>最終取引</th>
+            <th>メモ</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="clientTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MONTHLY ===== -->
+  <div class="view" id="view-monthly">
+    <div class="page-head">
+      <div class="page-title">月別レポート</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="tabs" id="monthlyYearTabs"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addMonthlyYear()" style="white-space:nowrap">＋ 年度追加</button>
+      </div>
+    </div>
+    <div class="kpi-row" id="monthlyKpis"></div>
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div class="card-head">月別売上 <span id="moSelLbl" style="font-size:11px;color:var(--text3);text-transform:none;font-weight:400">月をクリックで明細表示</span></div>
+        <div class="barchart" id="moBars"></div>
+        <div class="blabels" id="moBarLabels"></div>
+      </div>
+      <div class="card">
+        <div class="card-head" id="moDetailHead">月別明細</div>
+        <div class="tbl-wrap" id="moDetailWrap">
+          <div class="empty">月を選択してください</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
+        <span>月別サマリー <em id="moYearTotal" style="color:var(--teal);font-size:12px;text-transform:none;font-weight:400;margin-left:8px"></em></span>
+        <span style="font-size:11px;color:var(--text3);font-weight:400">外注費は費用入力ページから連動</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>月</th>
+            <th style="text-align:right">売上合計</th>
+            <th style="text-align:right">外注費</th>
+            <th style="text-align:right">差引</th>
+            <th style="text-align:right">入金済</th>
+            <th style="text-align:right">未入金</th>
+            <th style="text-align:right">件数</th>
+            <th>前月比</th>
+          </tr></thead>
+          <tbody id="monthlyTableBody"></tbody>
+          <tfoot><tr id="monthlyTotalRow"></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EXPENSES 費用入力 ===== -->
+  <div class="view" id="view-expenses">
+    <div class="page-head">
+      <div class="page-title">費用入力</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="tabs" id="expYearTabs"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addExpYear()">＋ 年度追加</button>
+        <button class="btn btn-ghost btn-sm" onclick="openExpRowModal()">＋ 項目を追加</button>
+      </div>
+    </div>
+    <div class="kpi-row" id="expKpis"></div>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+      <div class="card-head" style="padding:14px 18px">月次費用明細（万円単位）</div>
+      <div class="tbl-wrap">
+        <table id="expTable">
+          <thead><tr id="expHeaderRow"></tr></thead>
+          <tbody id="expBody"></tbody>
+        </table>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="saveExpenses()">保存する</button>
+        <span id="expSaveMsg" style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;opacity:0;transition:opacity .3s"></span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">万円単位 / 自動計算 / 項目名クリックで編集</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PIPELINE (未確定案件) ===== -->
+  <div class="view" id="view-pipeline">
+    <div class="page-head">
+      <div class="page-title">未確定案件 <em id="pipeCount"></em></div>
+      <button class="btn btn-primary" onclick="openPipeModal()">＋ 案件を追加</button>
+    </div>
+    <div class="kpi-row" id="pipeKpis"></div>
+    <div class="toolbar">
+      <input type="text" id="pipeSearch" placeholder="検索（取引先・案件名）" oninput="renderPipeline()">
+      <select id="pipeStageFilter" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;font-size:12px;font-family:inherit" onchange="renderPipeline()">
+        <option value="">すべてのステージ</option>
+        <option value="初回打合せ">初回打合せ</option>
+        <option value="提案中">提案中</option>
+        <option value="見積提出">見積提出</option>
+        <option value="交渉中">交渉中</option>
+        <option value="受注確実">受注確実</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>取引先</th>
+            <th>案件名</th>
+            <th style="text-align:right">見込み金額</th>
+            <th>ステージ</th>
+            <th>確度</th>
+            <th>期待値</th>
+            <th>期限目安</th>
+            <th>担当</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="pipeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CASH FLOW ===== -->
+  <div class="view" id="view-cashflow">
+    <div class="page-head">
+      <div class="page-title">キャッシュフロー <em id="cfYear"></em></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="tabs" id="cfYearTabs"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addCfYear()" style="white-space:nowrap">＋ 年度追加</button>
+      </div>
+    </div>
+    <div class="kpi-row" id="cfKpis"></div>
+    <div class="card" style="margin-bottom:12px;padding:0;overflow:hidden">
+      <div class="card-head" style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+        <span>月次キャッシュフロー（万円単位）</span>
+        <button class="btn btn-ghost btn-sm" onclick="openCfRowModal()">＋ 項目を追加</button>
+      </div>
+      <div class="tbl-wrap">
+        <table id="cfTable">
+          <thead><tr id="cfHeaderRow"></tr></thead>
+          <tbody id="cfBody"></tbody>
+        </table>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" onclick="saveCashflow()">保存する</button>
+        <span id="cfSaveMsg" style="font-size:11px;color:var(--green);font-family:'DM Mono',monospace;opacity:0;transition:opacity .3s"></span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">数値は万円単位 / 項目名をクリックで編集</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">月末現金残高推移</div>
+      <canvas id="cfCanvas" height="160"></canvas>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ── TRANSACTION MODAL ── -->
+<div class="overlay" id="txOverlay" onclick="closeTxModal(event)">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="txModalTitle">売上を登録</span>
+      <button class="btn-icon" onclick="closeTxModal()">✕</button>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>日付 *</label>
+        <input type="date" id="fDate">
+      </div>
+      <div class="form-row">
+        <label>金額（円）*</label>
+        <input type="number" id="fAmount" placeholder="例: 300000">
+      </div>
+    </div>
+    <div class="form-row">
+      <label>取引先 *</label>
+      <input type="text" id="fClient" placeholder="例: 竹田印刷" list="clientDatalist">
+      <datalist id="clientDatalist"></datalist>
+    </div>
+    <div class="form-row">
+      <label>内容・案件名</label>
+      <input type="text" id="fContent" placeholder="例: 採用動画制作">
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>請求状況</label>
+        <select id="fInvoice">
+          <option value="未請求">未請求</option>
+          <option value="請求済み">請求済み</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>入金状況</label>
+        <select id="fStatus">
+          <option value="未入金">未入金</option>
+          <option value="入金済み">入金済み</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>制作状態</label>
+        <select id="fProd">
+          <option value="制作済み">制作済み</option>
+          <option value="制作中">制作中</option>
+          <option value="未制作">未制作</option>
+        </select>
+      </div>
+      <div class="form-row"></div>
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="fMemo" placeholder="備考・詳細など"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-danger btn-sm" id="fDeleteBtn" style="display:none;margin-right:auto" onclick="deleteTx()">削除</button>
+      <button class="btn btn-ghost" onclick="closeTxModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveTx()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CLIENT MODAL ── -->
+<div class="overlay" id="clientOverlay" onclick="closeClientModal(event)">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="clientModalTitle">取引先を登録</span>
+      <button class="btn-icon" onclick="closeClientModal()">✕</button>
+    </div>
+    <div class="form-row">
+      <label>取引先名 *</label>
+      <input type="text" id="fcName" placeholder="例: 竹田印刷">
+    </div>
+    <div class="form-row">
+      <label>業種</label>
+      <input type="text" id="fcIndustry" placeholder="例: 印刷・広告">
+    </div>
+    <div class="form-row">
+      <label>担当者</label>
+      <input type="text" id="fcContact" placeholder="例: 山田 太郎">
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="fcMemo" placeholder="備考など"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-danger btn-sm" id="fcDeleteBtn" style="display:none;margin-right:auto" onclick="deleteClient()">削除</button>
+      <button class="btn btn-ghost" onclick="closeClientModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveClient()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EXP ROW MODAL ── -->
+<div class="overlay" id="expRowOverlay" onclick="closeExpRowModal(event)">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">
+      <span id="expRowModalTitle">費用項目を追加</span>
+      <button class="btn-icon" onclick="closeExpRowModal()">✕</button>
+    </div>
+    <input type="hidden" id="expRowEditKey">
+    <div class="form-row">
+      <label>項目名 *</label>
+      <input type="text" id="expRowLabel" placeholder="例: その他費用B">
+    </div>
+    <div class="form-row">
+      <label>カラー</label>
+      <select id="expRowColor">
+        <option value="">標準（白）</option>
+        <option value="red">赤（支出系）</option>
+        <option value="teal">緑（収入系）</option>
+        <option value="gold">黄（特記事項）</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-danger btn-sm" id="expRowDeleteBtn" style="display:none;margin-right:auto" onclick="deleteExpRow()">削除</button>
+      <button class="btn btn-ghost" onclick="closeExpRowModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveExpRow()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CF ROW MODAL ── -->
+<div class="overlay" id="cfRowOverlay" onclick="closeCfRowModal(event)">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">
+      <span id="cfRowModalTitle">項目を追加</span>
+      <button class="btn-icon" onclick="closeCfRowModal()">✕</button>
+    </div>
+    <input type="hidden" id="cfRowEditKey">
+    <div class="form-row">
+      <label>項目名 *</label>
+      <input type="text" id="cfRowLabel" placeholder="例: 借入返済B">
+    </div>
+    <div class="form-row">
+      <label>カラー</label>
+      <select id="cfRowColor">
+        <option value="">標準（白）</option>
+        <option value="red">赤（支出系）</option>
+        <option value="teal">緑（収入系）</option>
+        <option value="gold">黄（特記事項）</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-danger btn-sm" id="cfRowDeleteBtn" style="display:none;margin-right:auto" onclick="deleteCfRow()">削除</button>
+      <button class="btn btn-ghost" onclick="closeCfRowModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveCfRow()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ── PIPELINE MODAL ── -->
+<div class="overlay" id="pipeOverlay" onclick="closePipeModal(event)">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="pipeModalTitle">未確定案件を追加</span>
+      <button class="btn-icon" onclick="closePipeModal()">✕</button>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>取引先 *</label>
+        <input type="text" id="pfClient" placeholder="例: 日立製作所" list="clientDatalist">
+      </div>
+      <div class="form-row">
+        <label>案件名 *</label>
+        <input type="text" id="pfName" placeholder="例: 採用動画制作">
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>見込み金額（円）</label>
+        <input type="number" id="pfAmount" placeholder="例: 500000">
+      </div>
+      <div class="form-row">
+        <label>確度（%）</label>
+        <input type="number" id="pfProb" placeholder="例: 70" min="0" max="100">
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>ステージ</label>
+        <select id="pfStage">
+          <option>初回打合せ</option>
+          <option>提案中</option>
+          <option>見積提出</option>
+          <option>交渉中</option>
+          <option>受注確実</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>期限目安</label>
+        <input type="month" id="pfDeadline">
+      </div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row">
+        <label>担当者</label>
+        <input type="text" id="pfTanto" placeholder="例: 白木">
+      </div>
+      <div class="form-row">
+        <label>接触経路</label>
+        <select id="pfSource">
+          <option>紹介</option><option>既存顧客</option><option>営業</option><option>問い合わせ</option><option>その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>メモ</label>
+      <textarea id="pfMemo" placeholder="提案内容・条件・注意点など"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-danger btn-sm" id="pfDeleteBtn" style="display:none;margin-right:auto" onclick="deletePipe()">削除</button>
+      <button class="btn btn-ghost" onclick="closePipeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="savePipe()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATA LAYER  (localStorage)
+// ─────────────────────────────────────────────
+const LS_TX = 'sm_transactions';
+const LS_CL = 'sm_clients';
+
+function loadTx(){ try{ return JSON.parse(localStorage.getItem(LS_TX)||'[]') }catch(e){return[]} }
+function loadClients(){ try{ return JSON.parse(localStorage.getItem(LS_CL)||'[]') }catch(e){return[]} }
+function saveTxStore(d){ localStorage.setItem(LS_TX, JSON.stringify(d)); showSaved() }
+function saveClientStore(d){ localStorage.setItem(LS_CL, JSON.stringify(d)); showSaved() }
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7) }
+
+function showSaved(){
+  const el = document.getElementById('saveIndicator');
+  el.textContent = '保存済み ✓';
+  el.style.color = 'var(--green)';
+  setTimeout(()=>{ el.textContent=''; },2000);
+}
+
+// ─────────────────────────────────────────────
+// SEED DATA (first load)
+// ─────────────────────────────────────────────
+const SEED_TX = [
+  {id:'s1',date:'2025-02-05',client:'矢作地所',amount:4371000,content:'映像制作',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s2',date:'2025-02-15',client:'大和工芸',amount:510000,content:'パスコ',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s3',date:'2025-03-10',client:'バンタン',amount:1050000,content:'アニメ・OBOG',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s4',date:'2025-04-08',client:'アカデミー',amount:900000,content:'コンサル',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s5',date:'2025-05-12',client:'ムラアーカム',amount:720000,content:'尾関',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s6',date:'2025-06-20',client:'スポーツワン',amount:380000,content:'アイシン',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s7',date:'2025-07-15',client:'トッパン',amount:500000,content:'編集',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s8',date:'2025-08-05',client:'エスワイフード',amount:935000,content:'CM制作',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s9',date:'2025-09-20',client:'バンタン',amount:820000,content:'IT・クリエイター',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s10',date:'2025-10-10',client:'エネ知多',amount:860000,content:'OP',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s11',date:'2025-11-08',client:'日立ドキュメント',amount:1150000,content:'採用サイト',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s12',date:'2024-03-15',client:'竹田印刷',amount:2601000,content:'第四弾',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s13',date:'2024-11-20',client:'矢作地所',amount:4409800,content:'ウェルカム映像',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s14',date:'2024-12-10',client:'光風',amount:1085000,content:'デンソー新社屋',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s15',date:'2024-10-05',client:'矢作地所',amount:2100000,content:'プロローグ',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s16',date:'2024-09-15',client:'バンタン',amount:820000,content:'撮影',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s17',date:'2024-08-10',client:'SYフード',amount:680000,content:'CM',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s18',date:'2024-06-15',client:'スポーツワン',amount:255000,content:'アイシン駅伝',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s19',date:'2024-05-20',client:'バンタン',amount:440000,content:'スクールライフ',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s20',date:'2024-04-10',client:'エネチタ',amount:597000,content:'4月OP',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s21',date:'2024-02-05',client:'AHBペットショップ',amount:1135000,content:'制作',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s22',date:'2024-01-20',client:'竹田印刷',amount:920000,content:'第三弾',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s23',date:'2025-01-15',client:'アカデミー',amount:362000,content:'コンサル',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s24',date:'2025-01-20',client:'アピルス',amount:300000,content:'study at',status:'入金済み',prod:'制作済み',memo:''},
+  {id:'s25',date:'2025-12-05',client:'光風',amount:535000,content:'竹田印刷',status:'未入金',prod:'制作済み',memo:''},
+  // 2026年1月
+  {id:'e26_01_01',date:'2026-01-15',client:'株式会社八事クリエイト',amount:2500,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_01_02',date:'2026-01-15',client:'ナースパワー',amount:230000,content:'追加',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_01_03',date:'2026-01-15',client:'光風',amount:25000,content:'百五銀行',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  // 2026年2月
+  {id:'e26_02_01',date:'2026-02-15',client:'株式会社八事クリエイト',amount:2500,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_02',date:'2026-02-15',client:'東海通信社',amount:300000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_03',date:'2026-02-15',client:'TAKK',amount:690000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_04',date:'2026-02-15',client:'ミーツ',amount:120000,content:'1月分',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_05',date:'2026-02-15',client:'トッパン',amount:300000,content:'ぴたはにー',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_06',date:'2026-02-15',client:'ミーツ',amount:120000,content:'2月分',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_02_07',date:'2026-02-15',client:'TAKEDA',amount:100000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  // 2026年3月
+  {id:'e26_03_01',date:'2026-03-15',client:'パピルス',amount:50000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_02',date:'2026-03-15',client:'日立',amount:800000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_03',date:'2026-03-15',client:'セントラルハイウェイ',amount:235000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_04',date:'2026-03-15',client:'山崎',amount:240000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_05',date:'2026-03-15',client:'プラス',amount:150000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_06',date:'2026-03-15',client:'アートリー',amount:40000,content:'撮影',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_07',date:'2026-03-15',client:'アートリー',amount:100000,content:'撮影',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_08',date:'2026-03-15',client:'トッパン',amount:200000,content:'なごやめし',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_09',date:'2026-03-15',client:'ジョインつ',amount:250000,content:'撮影',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_10',date:'2026-03-15',client:'ボール建築',amount:291000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_11',date:'2026-03-15',client:'アイデアプラス',amount:100000,content:'たけちよ',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_12',date:'2026-03-15',client:'バンタン',amount:660000,content:'アニメ・OBOG',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_13',date:'2026-03-15',client:'アイコン',amount:270000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_03_14',date:'2026-03-15',client:'日立',amount:250000,content:'ライブ配信',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  // 2026年4月
+  {id:'e26_04_01',date:'2026-04-15',client:'パピルス',amount:30000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_02',date:'2026-04-15',client:'ミーツ',amount:140000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_03',date:'2026-04-15',client:'ミーツ',amount:120000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_04',date:'2026-04-15',client:'アートリー',amount:120000,content:'アバター',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_05',date:'2026-04-15',client:'中島',amount:235000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_06',date:'2026-04-15',client:'中島',amount:30000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_07',date:'2026-04-15',client:'アートリー',amount:30000,content:'モーションロゴ',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_08',date:'2026-04-15',client:'エレファント',amount:100000,content:'aimグループ',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_04_09',date:'2026-04-15',client:'アイデアプラス',amount:225000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  // 2026年10月
+  {id:'e26_10_01',date:'2026-10-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_10_02',date:'2026-10-15',client:'ミーツ',amount:120000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_10_03',date:'2026-10-15',client:'グッドスピード',amount:350000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_10_04',date:'2026-10-15',client:'鎌倉ハム',amount:500000,content:'採用動画',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_05_01',date:'2026-05-15',client:'竹田印刷',amount:500000,content:'名城',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_02',date:'2026-05-15',client:'Icon',amount:270000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_03',date:'2026-05-15',client:'ミーツ',amount:74000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_04',date:'2026-05-15',client:'TAKK',amount:68000,content:'修正',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_05',date:'2026-05-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_06',date:'2026-05-15',client:'竹田印刷',amount:150000,content:'伊丹',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_07',date:'2026-05-15',client:'アイデアプラス',amount:175000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_08',date:'2026-05-15',client:'バンタン',amount:230000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_09',date:'2026-05-15',client:'株式会社mychoce',amount:35000,content:'',invoice:'請求済み',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_10',date:'2026-05-15',client:'アートリー',amount:120000,content:'社内編集',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_05_11',date:'2026-05-15',client:'デザインワークショップ',amount:100000,content:'プレサンス',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_05_12',date:'2026-05-15',client:'デザインワークショップ',amount:150000,content:'新規2本',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_01',date:'2026-06-15',client:'竹田印刷',amount:250000,content:'ADS音声',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_02',date:'2026-06-15',client:'ミーツ',amount:74000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_03',date:'2026-06-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_04',date:'2026-06-15',client:'トウホウテク',amount:550000,content:'白木',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_05',date:'2026-06-15',client:'東海通信',amount:50000,content:'修正',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_06',date:'2026-06-15',client:'アートリーロッキー',amount:200000,content:'',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_06_07',date:'2026-06-15',client:'若さん和太鼓',amount:100000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_06_08',date:'2026-06-15',client:'アイデアプラス',amount:180000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_01',date:'2026-07-15',client:'WWG',amount:330000,content:'秋田屋',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_02',date:'2026-07-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_03',date:'2026-07-15',client:'ミーツ',amount:120000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_04',date:'2026-07-15',client:'アートリー',amount:70000,content:'LOSA',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_05',date:'2026-07-15',client:'フォイス',amount:260000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_06',date:'2026-07-15',client:'竹田印刷',amount:150000,content:'撮影',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_07_07',date:'2026-07-15',client:'日本ハム',amount:500000,content:'採用動画',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_01',date:'2026-08-15',client:'日立',amount:2000000,content:'ウェブ',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_02',date:'2026-08-15',client:'日立映像',amount:3000000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_03',date:'2026-08-15',client:'エスワイフード',amount:980000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_04',date:'2026-08-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_05',date:'2026-08-15',client:'ミーツ',amount:120000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_08_06',date:'2026-08-15',client:'SG',amount:100000,content:'デザイン費',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_08_07',date:'2026-08-15',client:'キュービック',amount:260000,content:'撮影費',invoice:'未請求',status:'未入金',prod:'制作済み',memo:''},
+  {id:'e26_09_01',date:'2026-09-15',client:'バンタン',amount:820000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_09_02',date:'2026-09-15',client:'パピルス',amount:40000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+  {id:'e26_09_03',date:'2026-09-15',client:'ミーツ',amount:120000,content:'',invoice:'未請求',status:'未入金',prod:'未制作',memo:''},
+];
+const SEED_CL = [
+  {id:'c1',name:'竹田印刷',industry:'印刷・広告',contact:'',memo:''},
+  {id:'c2',name:'矢作地所',industry:'不動産',contact:'',memo:''},
+  {id:'c3',name:'バンタン',industry:'教育',contact:'',memo:''},
+  {id:'c4',name:'光風',industry:'映像制作',contact:'',memo:''},
+  {id:'c5',name:'エネ知多',industry:'エネルギー',contact:'',memo:''},
+  {id:'c6',name:'アカデミー',industry:'教育',contact:'',memo:''},
+  {id:'c7',name:'日立ドキュメント',industry:'IT・製造',contact:'',memo:''},
+  {id:'c8',name:'スポーツワン',industry:'スポーツ',contact:'',memo:''},
+  {id:'c9',name:'大和工芸',industry:'製造',contact:'',memo:''},
+  {id:'c10',name:'トッパン',industry:'印刷',contact:'',memo:''},
+];
+
+function initData(){
+  if(!localStorage.getItem(LS_TX)){
+    saveTxStore(SEED_TX);
+  } else {
+    // Migrate: add any missing SEED entries (by id) to existing data
+    const existing = loadTx();
+    const existingIds = new Set(existing.map(t=>t.id));
+    const missing = SEED_TX.filter(t=>!existingIds.has(t.id));
+    if(missing.length > 0){
+      saveTxStore([...existing, ...missing]);
+    }
+  }
+  if(!localStorage.getItem(LS_CL)) saveClientStore(SEED_CL);
+}
+
+// ─────────────────────────────────────────────
+// UTIL
+// ─────────────────────────────────────────────
+function yen(v,s=false){
+  if(s){ if(v>=1e8) return (v/1e8).toFixed(1)+'億'; if(v>=1e4) return Math.round(v/1e4)+'万'; return v.toLocaleString() }
+  return '¥'+Math.round(v).toLocaleString('ja-JP')
+}
+function fmt(v){ return v>=1e4?Math.round(v/1e4)+'万':v.toLocaleString() }
+
+const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+let dashYear = new Date().getFullYear().toString();
+let dashSelMonth = null;
+let monthlyYear = dashYear;
+let txSortCol = 'date', txSortDir = -1;
+let trendChart = null;
+let editTxId = null, editClientId = null;
+
+// ─────────────────────────────────────────────
+// VIEW SWITCHING
+// ─────────────────────────────────────────────
+function showView(name, el){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  if(el) el.classList.add('active');
+  if(name==='dashboard') renderDashboard();
+  if(name==='transactions'){ populateYearFilter(); renderTxTable(); }
+  if(name==='clients') renderClientTable();
+  if(name==='monthly') renderMonthly();
+  if(name==='pipeline'){ renderPipeline(); }
+  if(name==='cashflow'){ renderCashflow(); }
+  if(name==='expenses'){ renderExpenses(); }
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────
+function renderDashboard(){
+  const txs = loadTx();
+  const years = getActiveYears(); // same as monthly report - includes manually added years
+  if(!years.includes(dashYear)) dashYear = years[0]||new Date().getFullYear().toString();
+
+  // Tabs
+  const tabs = document.getElementById('dashYearTabs');
+  tabs.innerHTML = years.map(y=>`<button class="tab${y===dashYear?' active':''}" onclick="dashYear='${y}';dashSelMonth=null;renderDashboard()">${y}年</button>`).join('');
+  document.getElementById('dashYear').textContent = dashYear+'年';
+
+  const yearTxs = txs.filter(t=>t.date.startsWith(dashYear));
+  const total = yearTxs.reduce((s,t)=>s+t.amount,0);
+  const avg = total/12;
+
+  // Monthly buckets
+  const monthly = Array(12).fill(0);
+  yearTxs.forEach(t=>{ const m=+t.date.slice(5,7)-1; monthly[m]+=t.amount });
+  const maxM = Math.max(...monthly);
+  const maxMIdx = monthly.indexOf(maxM);
+
+  document.getElementById('dKpi1').textContent = yen(total,true);
+  document.getElementById('dKpi1s').textContent = yen(total);
+  document.getElementById('dKpi2').textContent = yearTxs.length.toLocaleString();
+  document.getElementById('dKpi3').textContent = yen(avg,true);
+  document.getElementById('dKpi4').textContent = yen(maxM,true);
+  document.getElementById('dKpi4s').textContent = (maxMIdx+1)+'月';
+
+  // Bars
+  const bars = document.getElementById('dashBars');
+  const lbls = document.getElementById('dashBarLabels');
+  bars.innerHTML=''; lbls.innerHTML='';
+  monthly.forEach((v,i)=>{
+    const pct = maxM>0?v/maxM*100:0;
+    const w = document.createElement('div');
+    w.className='bw'+(i===dashSelMonth?' sel':'');
+    w.innerHTML=`<div class="bv">${v>0?yen(v,true):''}</div><div class="bb" style="height:${pct}%"></div>`;
+    w.onclick=()=>{ dashSelMonth=i; renderDashboard(); };
+    bars.appendChild(w);
+    const l=document.createElement('div');l.className='bml';l.textContent=(i+1)+'月';
+    lbls.appendChild(l);
+  });
+
+  // Rank
+  if(dashSelMonth!=null){
+    document.getElementById('selMonthLbl').textContent = (dashSelMonth+1)+'月';
+    document.getElementById('rankMonthLbl').textContent = dashYear+'年'+(dashSelMonth+1)+'月';
+    const mTxs = yearTxs.filter(t=>+t.date.slice(5,7)-1===dashSelMonth);
+    const map={};
+    mTxs.forEach(t=>{ map[t.client]=(map[t.client]||0)+t.amount });
+    const ranked = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const maxA = ranked[0]?.[1]||1;
+    document.getElementById('rankList').innerHTML = ranked.length
+      ? ranked.map((r,i)=>`<div class="rank-item"><div class="rank-n">${i+1}</div><div class="rank-name" title="${r[0]}">${r[0]}</div><div class="rank-bar-w"><div class="rank-bar" style="width:${Math.round(r[1]/maxA*100)}%"></div></div><div class="rank-amt">${yen(r[1],true)}</div></div>`).join('')
+      : '<div class="empty">データなし</div>';
+  }
+
+  // Trend chart
+  const allYears = getActiveYears().slice().reverse(); // oldest first for chart
+  const ctx = document.getElementById('trendCanvas').getContext('2d');
+  if(trendChart) trendChart.destroy();
+  const YC = {'2019':'rgba(167,139,250,.7)','2020':'rgba(96,165,250,.7)','2021':'rgba(52,211,153,.7)','2022':'rgba(251,146,60,.7)','2023':'rgba(248,113,113,.7)','2024':'rgba(61,217,203,.7)','2025':'rgba(245,197,66,.9)'};
+  const datasets = allYears.map(y=>{
+    const m=Array(12).fill(0);
+    txs.filter(t=>t.date.startsWith(y)).forEach(t=>{ m[+t.date.slice(5,7)-1]+=t.amount });
+    return { label:y+'年', data:m.map(v=>Math.round(v/10000)), borderColor:YC[y]||'#8892ab', borderWidth:y===dashYear?2.5:1, pointRadius:y===dashYear?3:0, tension:.35, borderDash:y===dashYear?[]:[3,3], backgroundColor:'transparent' };
+  });
+  trendChart = new Chart(ctx,{
+    type:'line', data:{labels:MONTHS,datasets},
+    options:{
+      responsive:true,
+      plugins:{legend:{position:'bottom',labels:{color:'#8892ab',font:{size:10},padding:8,boxWidth:18,usePointStyle:true}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ¥${c.raw}万`}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892ab',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892ab',font:{size:10},callback:v=>v+'万'}}}
+    }
+  });
+
+  // Recent
+  const recent = [...txs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  document.getElementById('recentTbl').innerHTML = recent.map(t=>`
+    <tr onclick="openTxModal('${t.id}')" style="cursor:pointer">
+      <td class="mono">${t.date}</td>
+      <td>${t.client}</td>
+      <td class="col-amount">${yen(t.amount,true)}</td>
+      <td><span class="badge ${(t.invoice||'未請求')==='請求済み'?'badge-mid':'badge-ng'}">${t.invoice||'未請求'}</span></td>
+      <td><span class="badge ${t.status==='入金済み'?'badge-ok':'badge-ng'}">${t.status||'未入金'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="empty">データなし</td></tr>';
+}
+
+// ─────────────────────────────────────────────
+// TRANSACTIONS
+// ─────────────────────────────────────────────
+function populateYearFilter(){
+  const txs = loadTx();
+  const years = [...new Set(txs.map(t=>t.date.slice(0,4)))].sort((a,b)=>b-a);
+  const sel = document.getElementById('txYear');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">すべての年</option>'+years.map(y=>`<option value="${y}">${y}年</option>`).join('');
+  // Default to most recent year on first load
+  if(!cur && years.length) sel.value = years[0];
+  else sel.value = cur;
+  // months
+  const ms = document.getElementById('txMonth');
+  ms.innerHTML = '<option value="">すべての月</option>'+MONTHS.map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('');
+}
+
+function renderTxTable(){
+  let txs = loadTx();
+  const q = document.getElementById('txSearch').value.toLowerCase();
+  const yr = document.getElementById('txYear').value;
+  const mo = document.getElementById('txMonth').value;
+  if(q) txs = txs.filter(t=>(t.client+t.content+t.memo).toLowerCase().includes(q));
+  if(yr) txs = txs.filter(t=>t.date.startsWith(yr));
+  if(mo) txs = txs.filter(t=>t.date.slice(5,7)===mo);
+  txs.sort((a,b)=>{
+    let v = txSortCol==='amount'?a.amount-b.amount:a[txSortCol]<b[txSortCol]?-1:1;
+    return v*txSortDir;
+  });
+
+  const total    = txs.reduce((s,t)=>s+t.amount,0);
+  const nyuukin  = txs.filter(t=>t.status==='入金済み').reduce((s,t)=>s+t.amount,0);
+  const miNy     = txs.filter(t=>t.status==='未入金').reduce((s,t)=>s+t.amount,0);
+  const seikyuu  = txs.filter(t=>(t.invoice||'未請求')==='請求済み').reduce((s,t)=>s+t.amount,0);
+
+  // Summary cards
+  const hasFilter = yr||mo||q;
+  const sumEl = document.getElementById('txSummary');
+  sumEl.style.display = hasFilter&&txs.length ? '' : 'none';
+  if(hasFilter&&txs.length){
+    const label = yr&&mo?`${yr}年${+mo}月`:(yr?`${yr}年`:(mo?`${+mo}月`:'フィルター中'));
+    document.getElementById('txSumLabel').textContent  = label+' 合計';
+    document.getElementById('txSumTotal').textContent  = yen(total,true);
+    document.getElementById('txSumCount').textContent  = txs.length+'件';
+    document.getElementById('txSumNyuukin').textContent= yen(nyuukin,true);
+    document.getElementById('txSumNyuukinPct').textContent= total>0?Math.round(nyuukin/total*100)+'%':'';
+    document.getElementById('txSumMi').textContent     = miNy>0?yen(miNy,true):'—';
+    document.getElementById('txSumMiCount').textContent= miNy>0?txs.filter(t=>t.status==='未入金').length+'件':'';
+    document.getElementById('txSumSeikyuu').textContent= seikyuu>0?yen(seikyuu,true):'—';
+    document.getElementById('txSumSeikyuuCount').textContent= seikyuu>0?txs.filter(t=>t.status==='請求済み').length+'件':'';
+  }
+
+  document.getElementById('txCount').textContent = txs.length+'件';
+  document.getElementById('txTableBody').innerHTML = txs.map(t=>{
+    const inv = t.invoice||'未請求';
+    const stat = t.status||'未入金';
+    const invBadge = inv==='請求済み'?'badge-mid':'badge-ng';
+    const statBadge = stat==='入金済み'?'badge-ok':'badge-ng';
+    return `<tr onclick="openTxModal('${t.id}')" style="cursor:pointer">
+      <td class="mono">${t.date}</td>
+      <td>${t.client}</td>
+      <td class="col-amount">${yen(t.amount)}</td>
+      <td style="color:var(--text2);max-width:140px;overflow:hidden;text-overflow:ellipsis">${t.content||'—'}</td>
+      <td style="text-align:center"><span class="badge ${invBadge}">${inv}</span></td>
+      <td style="text-align:center"><span class="badge ${statBadge}">${stat}</span></td>
+      <td style="color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis">${t.memo||''}</td>
+      <td><button class="btn-icon" onclick="event.stopPropagation();openTxModal('${t.id}')">✏️</button></td>
+    </tr>`;}).join('') || '<tr><td colspan="8" class="empty">データなし</td></tr>';
+
+  // Table foot total row
+  const foot = document.getElementById('txTableFoot');
+  if(foot && txs.length>0){
+    foot.innerHTML=`<tr style="border-top:1px solid var(--border2)">
+      <td colspan="3" style="padding:8px;color:var(--text3);font-size:11px">${txs.length}件の合計</td>
+      <td class="col-amount" style="font-weight:700;color:var(--teal)">${yen(total)}</td>
+      <td></td>
+      <td style="font-size:11px;color:var(--text3)">
+        入金済み ${yen(nyuukin,true)}
+        ${miNy>0?`<span style="color:var(--red);margin-left:8px">未入金 ${yen(miNy,true)}</span>`:''}
+      </td>
+      <td colspan="3"></td>
+    </tr>`;
+  } else if(foot){ foot.innerHTML=''; }
+}
+
+function sortTx(col){ if(txSortCol===col) txSortDir*=-1; else{txSortCol=col;txSortDir=-1} renderTxTable(); }
+
+// ─────────────────────────────────────────────
+// TX MODAL
+// ─────────────────────────────────────────────
+function openTxModal(id=null){
+  editTxId = id;
+  const cl = loadClients();
+  document.getElementById('clientDatalist').innerHTML = cl.map(c=>`<option value="${c.name}">`).join('');
+  if(id){
+    const t = loadTx().find(x=>x.id===id);
+    if(!t) return;
+    document.getElementById('txModalTitle').textContent = '売上を編集';
+    document.getElementById('fDate').value = t.date;
+    document.getElementById('fAmount').value = t.amount;
+    document.getElementById('fClient').value = t.client;
+    document.getElementById('fContent').value = t.content||'';
+    // 旧データの後方互換：status='請求済み'→invoice='請求済み',status='未入金'
+    let legacyInvoice = t.invoice;
+    let legacyStatus  = t.status;
+    if(!t.invoice){
+      if(t.status==='入金済み'){legacyInvoice='請求済み';legacyStatus='入金済み';}
+      else if(t.status==='請求済み'){legacyInvoice='請求済み';legacyStatus='未入金';}
+      else {legacyInvoice='未請求';legacyStatus='未入金';}
+    }
+    document.getElementById('fInvoice').value = legacyInvoice;
+    document.getElementById('fStatus').value  = legacyStatus;
+    document.getElementById('fProd').value    = t.prod||'制作済み';
+    document.getElementById('fMemo').value = t.memo||'';
+    document.getElementById('fDeleteBtn').style.display='';
+  } else {
+    document.getElementById('txModalTitle').textContent = '売上を登録';
+    document.getElementById('fDate').value = new Date().toISOString().slice(0,10);
+    document.getElementById('fAmount').value='';
+    document.getElementById('fClient').value='';
+    document.getElementById('fContent').value='';
+    document.getElementById('fInvoice').value='未請求';
+    document.getElementById('fStatus').value='未入金';
+    document.getElementById('fProd').value='制作済み';
+    document.getElementById('fMemo').value='';
+    document.getElementById('fDeleteBtn').style.display='none';
+  }
+  document.getElementById('txOverlay').classList.add('open');
+}
+function closeTxModal(e){ if(e&&e.target!==e.currentTarget)return; document.getElementById('txOverlay').classList.remove('open'); }
+
+function saveTx(){
+  const date=document.getElementById('fDate').value.trim();
+  const amount=+document.getElementById('fAmount').value;
+  const client=document.getElementById('fClient').value.trim();
+  if(!date||!amount||!client){ toast('日付・金額・取引先は必須です','red'); return; }
+  const txs = loadTx();
+  if(editTxId){
+    const i=txs.findIndex(t=>t.id===editTxId);
+    if(i>=0) txs[i]={...txs[i],date,amount,client,content:document.getElementById('fContent').value,invoice:document.getElementById('fInvoice').value,status:document.getElementById('fStatus').value,prod:document.getElementById('fProd').value,memo:document.getElementById('fMemo').value};
+  } else {
+    txs.push({id:uid(),date,amount,client,content:document.getElementById('fContent').value,invoice:document.getElementById('fInvoice').value,status:document.getElementById('fStatus').value,prod:document.getElementById('fProd').value,memo:document.getElementById('fMemo').value});
+    // auto-add client
+    const cls=loadClients();
+    if(!cls.find(c=>c.name===client)){ cls.push({id:uid(),name:client,industry:'',contact:'',memo:''}); saveClientStore(cls); }
+  }
+  saveTxStore(txs);
+  closeTxModal();
+  renderTxTable();
+  renderDashboard();
+  // 取引先管理と連動
+  if(document.getElementById('view-clients').classList.contains('active')) renderClientTable();
+  toast('保存しました');
+}
+
+function deleteTx(){
+  if(!confirm('この売上を削除しますか？')) return;
+  const txs = loadTx().filter(t=>t.id!==editTxId);
+  saveTxStore(txs);
+  closeTxModal();
+  renderTxTable();
+  renderDashboard();
+  if(document.getElementById('view-clients').classList.contains('active')) renderClientTable();
+  toast('削除しました');
+}
+
+// ─────────────────────────────────────────────
+// CLIENTS
+// ─────────────────────────────────────────────
+function renderClientTable(){
+  const clients = loadClients();
+  const txs = loadTx();
+  const q = document.getElementById('clientSearch').value.toLowerCase();
+  const filtered = clients.filter(c=>c.name.toLowerCase().includes(q)||c.industry.toLowerCase().includes(q));
+  document.getElementById('clientCount').textContent = filtered.length+'社';
+  document.getElementById('clientTableBody').innerHTML = filtered.map(c=>{
+    const cTxs = txs.filter(t=>t.client===c.name);
+    const total = cTxs.reduce((s,t)=>s+t.amount,0);
+    const last = cTxs.sort((a,b)=>b.date.localeCompare(a.date))[0]?.date||'—';
+    return `<tr>
+      <td style="font-weight:500">${c.name}</td>
+      <td class="col-amount">${yen(total)}</td>
+      <td class="num mono">${cTxs.length}</td>
+      <td class="mono" style="color:var(--text2)">${last}</td>
+      <td style="color:var(--text3)">${c.memo||''}</td>
+      <td><button class="btn-icon" onclick="openClientModal('${c.id}')">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">データなし</td></tr>';
+}
+
+function openClientModal(id=null){
+  editClientId=id;
+  if(id){
+    const c=loadClients().find(x=>x.id===id);
+    if(!c) return;
+    document.getElementById('clientModalTitle').textContent='取引先を編集';
+    document.getElementById('fcName').value=c.name;
+    document.getElementById('fcIndustry').value=c.industry||'';
+    document.getElementById('fcContact').value=c.contact||'';
+    document.getElementById('fcMemo').value=c.memo||'';
+    document.getElementById('fcDeleteBtn').style.display='';
+  } else {
+    document.getElementById('clientModalTitle').textContent='取引先を登録';
+    document.getElementById('fcName').value='';
+    document.getElementById('fcIndustry').value='';
+    document.getElementById('fcContact').value='';
+    document.getElementById('fcMemo').value='';
+    document.getElementById('fcDeleteBtn').style.display='none';
+  }
+  document.getElementById('clientOverlay').classList.add('open');
+}
+function closeClientModal(e){ if(e&&e.target!==e.currentTarget)return; document.getElementById('clientOverlay').classList.remove('open'); }
+
+function saveClient(){
+  const name=document.getElementById('fcName').value.trim();
+  if(!name){ toast('取引先名は必須です','red'); return; }
+  const cl=loadClients();
+  if(editClientId){
+    const i=cl.findIndex(c=>c.id===editClientId);
+    if(i>=0) cl[i]={...cl[i],name,industry:document.getElementById('fcIndustry').value,contact:document.getElementById('fcContact').value,memo:document.getElementById('fcMemo').value};
+  } else {
+    cl.push({id:uid(),name,industry:document.getElementById('fcIndustry').value,contact:document.getElementById('fcContact').value,memo:document.getElementById('fcMemo').value});
+  }
+  saveClientStore(cl);
+  closeClientModal();
+  renderClientTable();
+  toast('保存しました');
+}
+
+function deleteClient(){
+  if(!confirm('この取引先を削除しますか？')) return;
+  saveClientStore(loadClients().filter(c=>c.id!==editClientId));
+  closeClientModal();
+  renderClientTable();
+  toast('削除しました');
+}
+
+// ─────────────────────────────────────────────
+// MONTHLY REPORT
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// MONTHLY REPORT (enhanced)
+// ─────────────────────────────────────────────
+const LS_YEARS = 'sm_active_years';
+function getActiveYears(){
+  const txYears = [...new Set(loadTx().map(t=>t.date.slice(0,4)))];
+  let stored = [];
+  try{ stored = JSON.parse(localStorage.getItem(LS_YEARS)||'[]'); }catch(e){}
+  return [...new Set([...txYears,...stored])].sort((a,b)=>b-a);
+}
+function addMonthlyYear(){
+  const y = prompt('追加する年度を入力（例：2026）');
+  if(!y||!/^\d{4}$/.test(y.trim())){ if(y!==null) alert('4桁の年度を入力してください'); return; }
+  let stored = [];
+  try{ stored = JSON.parse(localStorage.getItem(LS_YEARS)||'[]'); }catch(e){}
+  if(!stored.includes(y.trim())) stored.push(y.trim());
+  localStorage.setItem(LS_YEARS, JSON.stringify(stored));
+  monthlyYear = y.trim();
+  renderMonthly();
+  toast('年度を追加しました');
+}
+
+let moSelMonth = null;
+
+function renderMonthly(){
+  const txs = loadTx();
+  const years = getActiveYears();
+  if(!years.length){ document.getElementById('monthlyKpis').innerHTML='<div class="empty" style="grid-column:1/-1">売上データがありません</div>'; return; }
+  // Default to most recent year that has transaction data
+  const txYears = [...new Set(loadTx().map(t=>t.date.slice(0,4)))].sort((a,b)=>b-a);
+  if(!years.includes(monthlyYear)) monthlyYear = txYears[0]||years[0];
+
+  document.getElementById('monthlyYearTabs').innerHTML = years.map(y=>`<button class="tab${y===monthlyYear?' active':''}" onclick="monthlyYear='${y}';moSelMonth=null;renderMonthly()">${y}年</button>`).join('');
+
+  const yTxs = txs.filter(t=>t.date.startsWith(monthlyYear));
+  const expData = loadExp();
+  const expYear = expData[monthlyYear]||{};
+  const gaichuuArr = expYear.gaichuu||Array(12).fill(0);
+
+  const monthly = Array(12).fill(null).map((_,i)=>{
+    const m = yTxs.filter(t=>+t.date.slice(5,7)-1===i);
+    const rev = m.reduce((s,t)=>s+t.amount,0);
+    const gaichuu = (+(gaichuuArr[i])||0)*10000;
+    return {
+      total: rev, count: m.length, gaichuu, diff: rev-gaichuu,
+      nyuukin:   m.filter(t=>t.status==='入金済み').reduce((s,t)=>s+t.amount,0),
+      miNyuukin: m.filter(t=>t.status!=='入金済み').reduce((s,t)=>s+t.amount,0),
+      txs: m
+    };
+  });
+
+  const yearTotal    = monthly.reduce((s,m)=>s+m.total,0);
+  const yearCount    = monthly.reduce((s,m)=>s+m.count,0);
+  const totalNy      = monthly.reduce((s,m)=>s+m.nyuukin,0);
+  const totalMi      = monthly.reduce((s,m)=>s+m.miNyuukin,0);
+  const totalGaichuu = monthly.reduce((s,m)=>s+m.gaichuu,0);
+  const bestM        = monthly.reduce((b,m,i)=>m.total>b.total?{...m,i}:b,{total:0,i:0});
+
+  const moYTel = document.getElementById('moYearTotal');
+  if(moYTel) moYTel.textContent = `年間合計 ${yen(yearTotal,true)}`;
+
+  document.getElementById('monthlyKpis').innerHTML = `
+    <div class="kpi k1"><div class="kpi-lbl">年間売上合計</div><div class="kpi-val" style="color:var(--teal)">${yen(yearTotal,true)}</div><div class="kpi-sub">${monthlyYear}年 ${yearCount}件</div></div>
+    <div class="kpi k2"><div class="kpi-lbl">最高月</div><div class="kpi-val">${yen(bestM.total,true)}</div><div class="kpi-sub">${bestM.i+1}月</div></div>
+    <div class="kpi k3"><div class="kpi-lbl">入金済み</div><div class="kpi-val" style="color:var(--green)">${yen(totalNy,true)}</div><div class="kpi-sub">${Math.round(yearTotal>0?totalNy/yearTotal*100:0)}%</div></div>
+    <div class="kpi k4"><div class="kpi-lbl">未入金</div><div class="kpi-val" style="color:${totalMi>0?'var(--red)':'var(--text3)'}">${yen(totalMi,true)}</div><div class="kpi-sub">回収待ち</div></div>
+  `;
+
+  const maxM2 = Math.max(...monthly.map(m=>m.total),1);
+  const bars  = document.getElementById('moBars');
+  const lbls  = document.getElementById('moBarLabels');
+  bars.innerHTML=''; lbls.innerHTML='';
+  monthly.forEach((m,i)=>{
+    const pct=m.total/maxM2*100, sel=i===moSelMonth;
+    const w=document.createElement('div'); w.className='bw'+(sel?' sel':'');
+    w.innerHTML=`<div class="bv">${m.total>0?yen(m.total,true):''}</div><div class="bb" style="height:${pct}%${sel?';background:var(--teal)':''}"></div>`;
+    w.onclick=()=>{moSelMonth=i;renderMonthly();}; bars.appendChild(w);
+    const l=document.createElement('div'); l.className='bml'; l.textContent=(i+1)+'月'; lbls.appendChild(l);
+  });
+
+  if(moSelMonth!=null){
+    const m=monthly[moSelMonth];
+    document.getElementById('moSelLbl').textContent=(moSelMonth+1)+'月';
+    document.getElementById('moDetailHead').textContent=monthlyYear+'年'+(moSelMonth+1)+'月の取引';
+    if(!m.txs.length){
+      document.getElementById('moDetailWrap').innerHTML='<div class="empty">この月の取引はありません</div>';
+    } else {
+      const sorted=[...m.txs].sort((a,b)=>b.date.localeCompare(a.date));
+      document.getElementById('moDetailWrap').innerHTML=`<table>
+        <thead><tr><th>日付</th><th>取引先</th><th style="text-align:right">金額</th><th>状態</th></tr></thead>
+        <tbody>${sorted.map(t=>`<tr onclick="openTxModal('${t.id}')" style="cursor:pointer">
+          <td class="mono" style="font-size:11px">${t.date}</td><td>${t.client}</td>
+          <td class="col-amount">${yen(t.amount,true)}</td>
+          <td><span class="badge ${(t.invoice||'未請求')==='請求済み'?'badge-mid':'badge-ng'}">${t.invoice||'未請求'}</span></td>
+      <td><span class="badge ${t.status==='入金済み'?'badge-ok':'badge-ng'}">${t.status||'未入金'}</span></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="2" style="color:var(--text3);font-size:11px;padding:6px 8px">合計</td><td class="col-amount" style="font-weight:600">${yen(m.total)}</td><td></td></tr></tfoot>
+      </table>`;
+    }
+  }
+
+  document.getElementById('monthlyTableBody').innerHTML = monthly.map((m,i)=>{
+    const prev=i>0?monthly[i-1].total:null;
+    let momCell='—';
+    if(prev!=null&&prev>0){
+      const pct=((m.total-prev)/prev*100).toFixed(1);
+      const cls=+pct>0?'trend-up':+pct<0?'trend-dn':'trend-flat';
+      momCell=`<span class="badge ${cls}" style="font-size:10px">${+pct>0?'▲':+pct<0?'▼':''}${Math.abs(pct)}%</span>`;
+    }
+    const dc=m.diff>=0?'var(--green)':'var(--red)';
+    return `<tr onclick="moSelMonth=${i};renderMonthly()" style="cursor:pointer${i===moSelMonth?';background:var(--teal-dim)':''}">
+      <td style="color:var(--text2);font-family:'DM Mono',monospace">${i+1}月</td>
+      <td class="col-amount" style="font-weight:${m.total>0?'600':'400'}">${m.total>0?yen(m.total):'—'}</td>
+      <td class="col-amount" style="color:var(--red)">${m.gaichuu>0?yen(m.gaichuu,true):'—'}</td>
+      <td class="col-amount" style="color:${dc}">${m.total>0||m.gaichuu>0?yen(m.diff,true):'—'}</td>
+      <td class="col-amount" style="color:var(--green)">${m.nyuukin>0?yen(m.nyuukin,true):'—'}</td>
+      <td class="col-amount" style="color:${m.miNyuukin>0?'var(--red)':'var(--text3)'}">${m.miNyuukin>0?yen(m.miNyuukin,true):'—'}</td>
+      <td class="num mono">${m.count||'—'}</td>
+      <td>${momCell}</td>
+    </tr>`;
+  }).join('');
+
+  const totalDiff=yearTotal-totalGaichuu;
+  const tr=document.getElementById('monthlyTotalRow');
+  if(tr) tr.innerHTML=`
+    <td style="font-weight:600;color:var(--text2);padding:8px">年間合計</td>
+    <td class="col-amount" style="font-weight:700;color:var(--teal)">${yen(yearTotal)}</td>
+    <td class="col-amount" style="color:var(--red)">${totalGaichuu>0?yen(totalGaichuu,true):'—'}</td>
+    <td class="col-amount" style="font-weight:600;color:${totalDiff>=0?'var(--green)':'var(--red)'}">${yen(totalDiff,true)}</td>
+    <td class="col-amount" style="color:var(--green)">${yen(totalNy,true)}</td>
+    <td class="col-amount" style="color:var(--red)">${totalMi>0?yen(totalMi,true):'—'}</td>
+    <td class="num mono">${yearCount}</td><td></td>`;
+}
+
+
+// ─────────────────────────────────────────────
+// CSV EXPORT
+// ─────────────────────────────────────────────
+function exportCSV(){
+  const txs = loadTx().sort((a,b)=>b.date.localeCompare(a.date));
+  const rows = [['日付','取引先','金額','内容','請求状況','入金状況','制作状態','メモ'],...txs.map(t=>[t.date,t.client,t.amount,t.content||'',t.invoice||'未請求',t.status||'未入金',t.prod||'',t.memo||''])];
+  const csv = '\uFEFF'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='売上データ.csv';a.click();
+  toast('CSVをエクスポートしました');
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+function toast(msg,type='teal'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.borderColor=type==='red'?'var(--red)':'var(--teal)';
+  el.style.color=type==='red'?'var(--red)':'var(--teal)';
+  el.style.display='block';
+  setTimeout(()=>el.style.display='none',2500);
+}
+
+// ─────────────────────────────────────────────
+// PIPELINE (未確定案件)
+// ─────────────────────────────────────────────
+const LS_PIPE = 'sm_pipeline';
+function loadPipe(){ try{ return JSON.parse(localStorage.getItem(LS_PIPE)||'[]') }catch(e){return[]} }
+function savePipeStore(d){ localStorage.setItem(LS_PIPE, JSON.stringify(d)); showSaved(); }
+
+const STAGE_COLOR = {'初回打合せ':'var(--text3)','提案中':'var(--purple)','見積提出':'var(--gold)','交渉中':'rgba(61,217,203,.8)','受注確実':'var(--green)'};
+const STAGE_BG    = {'初回打合せ':'rgba(255,255,255,.05)','提案中':'rgba(167,139,250,.15)','見積提出':'rgba(245,197,66,.15)','交渉中':'rgba(61,217,203,.12)','受注確実':'rgba(76,219,140,.15)'};
+
+let editPipeId = null;
+
+function renderPipeline(){
+  let pipes = loadPipe();
+  const q = document.getElementById('pipeSearch').value.toLowerCase();
+  const sf = document.getElementById('pipeStageFilter').value;
+  if(q) pipes = pipes.filter(p=>(p.client+p.name+p.tanto).toLowerCase().includes(q));
+  if(sf) pipes = pipes.filter(p=>p.stage===sf);
+  pipes.sort((a,b)=>(b.prob||0)-(a.prob||0));
+
+  document.getElementById('pipeCount').textContent = pipes.length+'件';
+
+  const allPipes = loadPipe();
+  const totalExp = allPipes.reduce((s,p)=>(p.amount||0)*(p.prob||0)/100+s,0);
+  const totalFace = allPipes.reduce((s,p)=>s+(p.amount||0),0);
+  const hot = allPipes.filter(p=>p.stage==='受注確実').reduce((s,p)=>s+(p.amount||0),0);
+  document.getElementById('pipeKpis').innerHTML = `
+    <div class="kpi k1"><div class="kpi-lbl">案件総額（表面）</div><div class="kpi-val">${yen(totalFace,true)}</div><div class="kpi-sub">${allPipes.length}件合計</div></div>
+    <div class="kpi k2"><div class="kpi-lbl">期待値合計</div><div class="kpi-val" style="color:var(--teal)">${yen(totalExp,true)}</div><div class="kpi-sub">確度加重平均</div></div>
+    <div class="kpi k3"><div class="kpi-lbl">受注確実</div><div class="kpi-val" style="color:var(--green)">${yen(hot,true)}</div><div class="kpi-sub">${allPipes.filter(p=>p.stage==='受注確実').length}件</div></div>
+    <div class="kpi k4"><div class="kpi-lbl">提案中＋見積</div><div class="kpi-val" style="color:var(--gold)">${allPipes.filter(p=>p.stage==='提案中'||p.stage==='見積提出').length}件</div><div class="kpi-sub">フォロー推奨</div></div>
+  `;
+
+  document.getElementById('pipeTableBody').innerHTML = pipes.map(p=>{
+    const exp = Math.round((p.amount||0)*(p.prob||0)/100);
+    const scolor = STAGE_COLOR[p.stage]||'var(--text3)';
+    const sbg = STAGE_BG[p.stage]||'rgba(255,255,255,.05)';
+    const probColor = (p.prob||0)>=70?'var(--green)':(p.prob||0)>=40?'var(--gold)':'var(--red)';
+    return `<tr onclick="openPipeModal('${p.id}')" style="cursor:pointer">
+      <td style="font-weight:500">${p.client||'—'}</td>
+      <td style="color:var(--text2)">${p.name||'—'}</td>
+      <td class="col-amount">${p.amount?yen(p.amount):'—'}</td>
+      <td><span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:500;background:${sbg};color:${scolor}">${p.stage||'—'}</span></td>
+      <td><span style="font-family:'DM Mono',monospace;font-size:12px;color:${probColor};font-weight:500">${p.prob!=null?p.prob+'%':'—'}</span></td>
+      <td class="col-amount" style="color:var(--teal)">${exp>0?yen(exp,true):'—'}</td>
+      <td style="color:var(--text2);font-family:'DM Mono',monospace;font-size:11px">${p.deadline||'—'}</td>
+      <td style="color:var(--text3)">${p.tanto||'—'}</td>
+      <td><button class="btn-icon" onclick="event.stopPropagation();openPipeModal('${p.id}')">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="empty">案件がありません。「＋ 案件を追加」から登録してください。</td></tr>';
+}
+
+function openPipeModal(id=null){
+  editPipeId=id;
+  if(id){
+    const p=loadPipe().find(x=>x.id===id); if(!p) return;
+    document.getElementById('pipeModalTitle').textContent='案件を編集';
+    document.getElementById('pfClient').value=p.client||'';
+    document.getElementById('pfName').value=p.name||'';
+    document.getElementById('pfAmount').value=p.amount||'';
+    document.getElementById('pfProb').value=p.prob!=null?p.prob:'';
+    document.getElementById('pfStage').value=p.stage||'提案中';
+    document.getElementById('pfDeadline').value=p.deadline||'';
+    document.getElementById('pfTanto').value=p.tanto||'';
+    document.getElementById('pfSource').value=p.source||'紹介';
+    document.getElementById('pfMemo').value=p.memo||'';
+    document.getElementById('pfDeleteBtn').style.display='';
+  } else {
+    document.getElementById('pipeModalTitle').textContent='未確定案件を追加';
+    ['pfClient','pfName','pfTanto','pfMemo'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('pfAmount').value='';
+    document.getElementById('pfProb').value='50';
+    document.getElementById('pfStage').value='提案中';
+    document.getElementById('pfDeadline').value='';
+    document.getElementById('pfSource').value='紹介';
+    document.getElementById('pfDeleteBtn').style.display='none';
+  }
+  document.getElementById('pipeOverlay').classList.add('open');
+}
+function closePipeModal(e){ if(e&&e.target!==e.currentTarget)return; document.getElementById('pipeOverlay').classList.remove('open'); }
+
+function savePipe(){
+  const client=document.getElementById('pfClient').value.trim();
+  const name=document.getElementById('pfName').value.trim();
+  if(!client||!name){ toast('取引先と案件名は必須です','red'); return; }
+  const pipes=loadPipe();
+  const obj={id:editPipeId||uid(),client,name,amount:+document.getElementById('pfAmount').value||0,prob:+document.getElementById('pfProb').value||0,stage:document.getElementById('pfStage').value,deadline:document.getElementById('pfDeadline').value,tanto:document.getElementById('pfTanto').value.trim(),source:document.getElementById('pfSource').value,memo:document.getElementById('pfMemo').value.trim()};
+  if(editPipeId){ const i=pipes.findIndex(p=>p.id===editPipeId); if(i>=0) pipes[i]=obj; }
+  else pipes.push(obj);
+  savePipeStore(pipes); closePipeModal(); renderPipeline(); toast('保存しました');
+}
+function deletePipe(){
+  if(!confirm('この案件を削除しますか？')) return;
+  savePipeStore(loadPipe().filter(p=>p.id!==editPipeId));
+  closePipeModal(); renderPipeline(); toast('削除しました');
+}
+
+// ─────────────────────────────────────────────
+// CASH FLOW
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// CASH FLOW — dynamic rows
+// ─────────────────────────────────────────────
+const LS_CF      = 'sm_cashflow';
+const LS_CF_ROWS = 'sm_cf_rows';
+
+const CF_ROWS_DEFAULT = [
+  {key:'eigyo',    label:'営業利益',       color:''},
+  {key:'shohi',    label:'消費税（支払）',  color:'red'},
+  {key:'cd',       label:'CD',             color:''},
+  {key:'koyo',     label:'雇用調整',        color:''},
+  {key:'ginko',    label:'銀行返済',        color:'red'},
+  {key:'car',      label:'車',             color:''},
+  {key:'zeikin',   label:'税金',           color:'red'},
+  {key:'yachin',   label:'家賃',           color:'red'},
+  {key:'hikkoshi', label:'引っ越し・臨時',  color:''},
+  {key:'other',    label:'その他',          color:''},
+];
+
+function getCfRows(){
+  try{
+    const r = JSON.parse(localStorage.getItem(LS_CF_ROWS)||'null');
+    if(r&&r.length) return r;
+  }catch(e){}
+  return JSON.parse(JSON.stringify(CF_ROWS_DEFAULT));
+}
+function saveCfRowsDef(rows){ localStorage.setItem(LS_CF_ROWS, JSON.stringify(rows)); }
+function loadCF(){ try{ return JSON.parse(localStorage.getItem(LS_CF)||'{}'); }catch(e){return{};} }
+function saveCF(d){ localStorage.setItem(LS_CF, JSON.stringify(d)); }
+
+let cfYear    = new Date().getFullYear().toString();
+let cfChart   = null;
+let cfRowEditKey = null;
+
+const CF_PRESET = {
+  '2025':{
+    eigyo:  [-33, 86,-31,-38,248,  0,null,null,null,null,null,null],
+    shohi:  [-10,-24,-8.6,-7.8,-59.8,-12,null,null,null,null,null,null],
+    cd:     [  6,  0,  0, 17,  0,  0,null,null,null,null,null,null],
+    koyo:   [-10,-10,-10,-10,-10,-10,null,null,null,null,null,null],
+    ginko:  [-30,-30,-30,-30,-30,-30,null,null,null,null,null,null],
+    car:    [  0,  0,  0,  0,  0,  0,null,null,null,null,null,null],
+    zeikin: [  0,  0,-30,  0,  0,  0,null,null,null,null,null,null],
+    yachin: [  0,  0,  0,  0,  0,  0,null,null,null,null,null,null],
+    hikkoshi:[0,  0,  0,  0,  0,  0,null,null,null,null,null,null],
+    other:  [  0,  0,  0,  0,  0,  0,null,null,null,null,null,null],
+    opening_start:730,
+  }
+};
+
+function addCfYear(){
+  const y = prompt('追加する年度を入力（例：2026）');
+  if(!y||!/^\d{4}$/.test(y.trim())){ if(y!==null)alert('4桁の年度を入力してください'); return; }
+  cfYear = y.trim();
+  const d = loadCF();
+  if(!d[cfYear]){
+    const rows = getCfRows();
+    d[cfYear] = {opening_start:0};
+    rows.forEach(r=>{ d[cfYear][r.key]=Array(12).fill(null); });
+    saveCF(d);
+  }
+  renderCashflow();
+  toast(y+'年度を追加しました');
+}
+
+function getCfData(){
+  const d = loadCF();
+  if(!d[cfYear]){
+    const rows = getCfRows();
+    if(CF_PRESET[cfYear]) d[cfYear]=JSON.parse(JSON.stringify(CF_PRESET[cfYear]));
+    else{
+      d[cfYear]={opening_start:0};
+      rows.forEach(r=>{ d[cfYear][r.key]=Array(12).fill(null); });
+    }
+    // ensure all current row keys exist
+    rows.forEach(r=>{ if(!d[cfYear][r.key]) d[cfYear][r.key]=Array(12).fill(null); });
+  }
+  return d;
+}
+
+function calcCfClosing(yr){
+  const rows = getCfRows();
+  const d    = getCfData();
+  const yd   = d[yr];
+  const opening=Array(12).fill(0);
+  const closing=Array(12).fill(0);
+  opening[0]=yd.opening_start||0;
+  for(let i=0;i<12;i++){
+    const sum=rows.reduce((s,r)=>s+(+(yd[r.key]?.[i])||0),0);
+    closing[i]=+((opening[i]+sum).toFixed(2));
+    if(i<11)opening[i+1]=closing[i];
+  }
+  return {opening,closing,yd};
+}
+
+function cfRowColor(c){
+  if(c==='red')  return 'color:var(--red)';
+  if(c==='teal') return 'color:var(--teal)';
+  if(c==='gold') return 'color:var(--gold)';
+  return 'color:var(--text)';
+}
+
+function renderCashflow(){
+  const allData   = loadCF();
+  const presetYrs = Object.keys(CF_PRESET);
+  const dataYrs   = Object.keys(allData);
+  const years     = [...new Set([...dataYrs,...presetYrs,new Date().getFullYear().toString()])].sort((a,b)=>b-a);
+  if(!years.includes(cfYear)) cfYear=years[0];
+  document.getElementById('cfYear').textContent=cfYear+'年';
+  document.getElementById('cfYearTabs').innerHTML=years.map(y=>`<button class="tab${y===cfYear?' active':''}" onclick="cfYear='${y}';renderCashflow()">${y}年</button>`).join('');
+
+  const {opening,closing,yd}=calcCfClosing(cfYear);
+  const rows=getCfRows();
+
+  // KPIs
+  const minCash=Math.min(...closing);
+  const maxCash=Math.max(...closing);
+  const startCash=opening[0];
+  const endCash=closing[11];
+  document.getElementById('cfKpis').innerHTML=`
+    <div class="kpi k1"><div class="kpi-lbl">期末残高（12月末）</div><div class="kpi-val" style="color:var(--gold)">${endCash.toFixed(0)}万円</div><div class="kpi-sub">年初から${endCash-startCash>=0?'+':''}${(endCash-startCash).toFixed(0)}万</div></div>
+    <div class="kpi k2"><div class="kpi-lbl">最低残高</div><div class="kpi-val" style="color:${minCash<0?'var(--red)':'var(--teal)'}">${minCash.toFixed(0)}万円</div><div class="kpi-sub">${minCash<200?'⚠ 要注意':'安全圏'}</div></div>
+    <div class="kpi k3"><div class="kpi-lbl">最高残高</div><div class="kpi-val" style="color:var(--green)">${maxCash.toFixed(0)}万円</div><div class="kpi-sub">ピーク時</div></div>
+    <div class="kpi k4"><div class="kpi-lbl">年初残高</div><div class="kpi-val">${startCash.toFixed(0)}万円</div><div class="kpi-sub">1月頭</div></div>
+  `;
+
+  // Header
+  document.getElementById('cfHeaderRow').innerHTML=
+    '<th style="white-space:nowrap;min-width:130px">項目</th>'+
+    MONTHS.map(m=>`<th style="text-align:right;min-width:62px">${m}</th>`).join('')+
+    '<th style="min-width:32px"></th>';
+
+  // Body
+  const body=[];
+
+  // opening row - month 1 editable, months 2-12 auto from previous closing
+  body.push(`<tr style="border-bottom:1px solid var(--border)">
+    <td style="font-weight:600;color:var(--teal);white-space:nowrap">月頭残高</td>
+    <td style="text-align:right;padding:4px 6px">
+      <input type="number" step="0.1" id="cf_opening_start" value="${yd.opening_start||0}"
+        style="width:68px;text-align:right;background:var(--bg3);border:1px solid var(--border2);border-radius:4px;color:var(--teal);font-family:'DM Mono',monospace;font-size:12px;padding:3px 5px"
+        oninput="recalcCfDisplay()">
+    </td>
+    ${MONTHS.slice(1).map((_,i)=>`<td id="cf_opening_${i+1}" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--teal);padding:4px 6px;opacity:.7" title="${i+2}月頭 = ${i+1}月末残高">${opening[i+1].toFixed(0)}</td>`).join('')}
+    <td></td>
+  </tr>`);
+
+  // editable rows - white for positive, red for negative
+  rows.forEach(row=>{
+    body.push(`<tr>
+      <td style="${cfRowColor(row.color)};white-space:nowrap;cursor:pointer" title="クリックで名前変更" onclick="openCfRowModal('${row.key}')">
+        ${row.label} <span style="font-size:9px;opacity:.4">✏</span>
+      </td>
+      ${MONTHS.map((_,i)=>{
+        const v = yd[row.key]?.[i];
+        const vNum = v!=null?+v:null;
+        const inputColor = vNum!=null&&vNum<0 ? 'var(--red)' : 'var(--text)';
+        return `<td style="padding:2px 3px">
+          <input type="number" step="0.1" id="cf_${row.key}_${i}" value="${v!=null?v:''}" placeholder="0"
+            style="width:100%;text-align:right;background:transparent;border:1px solid transparent;border-radius:4px;font-family:'DM Mono',monospace;font-size:12px;padding:3px 4px;outline:none;color:${inputColor}"
+            onfocus="this.style.borderColor='var(--teal)';this.style.background='var(--bg3)'"
+            onblur="this.style.borderColor='transparent';this.style.background='transparent';cfColorInput(this)"
+            oninput="cfColorInput(this);recalcCfDisplay()">
+        </td>`;
+      }).join('')}
+      <td></td>
+    </tr>`);
+  });
+
+  // closing row
+  body.push(`<tr style="border-top:1px solid var(--border2)">
+    <td style="font-weight:700;color:var(--gold);white-space:nowrap">月末残高</td>
+    ${MONTHS.map((_,i)=>{
+      const v=closing[i];
+      const col=v<0?'var(--red)':v<200?'var(--gold)':'var(--green)';
+      return `<td id="cf_closing_${i}" style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${col};padding:4px 6px">${v.toFixed(0)}</td>`;
+    }).join('')}
+    <td></td>
+  </tr>`);
+
+  document.getElementById('cfBody').innerHTML=body.join('');
+  renderCfChart(closing);
+}
+
+function cfColorInput(el){
+  const v = el.value!==''?+el.value:null;
+  el.style.color = v!=null&&v<0 ? 'var(--red)' : 'var(--text)';
+}
+
+function recalcCfDisplay(){
+  const rows=getCfRows();
+  const opening=Array(12).fill(0);
+  const closing=Array(12).fill(0);
+  opening[0]=+document.getElementById('cf_opening_start').value||0;
+  for(let i=0;i<12;i++){
+    const sum=rows.reduce((s,r)=>{
+      const el=document.getElementById(`cf_${r.key}_${i}`);
+      return s+(el&&el.value!==''?+el.value:0);
+    },0);
+    closing[i]=+((opening[i]+sum).toFixed(2));
+    if(i<11)opening[i+1]=closing[i]; // 月末残高 → 次月の月頭残高
+  }
+  MONTHS.forEach((_,i)=>{
+    // 月頭残高：2月以降は前月末から自動連動
+    if(i>0){
+      const o=document.getElementById(`cf_opening_${i}`);
+      if(o){
+        o.textContent=opening[i].toFixed(0);
+        o.style.color = opening[i]<0?'var(--red)':'var(--teal)';
+      }
+    }
+    // 月末残高
+    const c=document.getElementById(`cf_closing_${i}`);
+    if(c){
+      c.textContent=closing[i].toFixed(0);
+      c.style.color=closing[i]<0?'var(--red)':closing[i]<200?'var(--gold)':'var(--green)';
+    }
+  });
+  renderCfChart(closing);
+}
+
+function saveCashflow(){
+  const rows=getCfRows();
+  const d=getCfData();
+  const yd=d[cfYear];
+  yd.opening_start=+document.getElementById('cf_opening_start').value||0;
+  rows.forEach(r=>{
+    if(!yd[r.key])yd[r.key]=Array(12).fill(null);
+    MONTHS.forEach((_,i)=>{
+      const el=document.getElementById(`cf_${r.key}_${i}`);
+      if(el)yd[r.key][i]=el.value!==''?+el.value:null;
+    });
+  });
+  saveCF(d);
+  const msg=document.getElementById('cfSaveMsg');
+  msg.textContent='保存しました ✓'; msg.style.opacity='1';
+  setTimeout(()=>msg.style.opacity='0',2000);
+  toast('キャッシュフローを保存しました');
+}
+
+function renderCfChart(closing){
+  const ctx=document.getElementById('cfCanvas').getContext('2d');
+  if(cfChart)cfChart.destroy();
+  const colors=closing.map(v=>v<0?'rgba(240,96,96,0.8)':v<200?'rgba(245,197,66,0.8)':'rgba(61,217,203,0.8)');
+  cfChart=new Chart(ctx,{
+    type:'bar',
+    data:{labels:MONTHS,datasets:[
+      {label:'月末残高（万円）',data:closing.map(v=>+v.toFixed(1)),backgroundColor:colors,borderRadius:4,borderSkipped:false},
+      {label:'目標ライン（200万）',data:Array(12).fill(200),type:'line',borderColor:'rgba(245,197,66,0.4)',borderDash:[4,4],borderWidth:1,pointRadius:0,backgroundColor:'transparent'},
+    ]},
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{color:'#8892ab',font:{size:10},padding:8,usePointStyle:true,pointStyleWidth:8}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'万円'}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892ab',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#8892ab',font:{size:10},callback:v=>v+'万'}}}}
+  });
+}
+
+// ─────────────────────────────────────────────
+// EXP ROW MANAGEMENT
+// ─────────────────────────────────────────────
+let expRowEditKey = null;
+
+function openExpRowModal(key=null){
+  expRowEditKey=key;
+  if(key){
+    const row=getExpRows().find(r=>r.key===key);
+    if(!row)return;
+    document.getElementById('expRowModalTitle').textContent='費用項目を編集';
+    document.getElementById('expRowEditKey').value=key;
+    document.getElementById('expRowLabel').value=row.label;
+    document.getElementById('expRowColor').value=row.color||'';
+    document.getElementById('expRowDeleteBtn').style.display='';
+  } else {
+    document.getElementById('expRowModalTitle').textContent='費用項目を追加';
+    document.getElementById('expRowEditKey').value='';
+    document.getElementById('expRowLabel').value='';
+    document.getElementById('expRowColor').value='red';
+    document.getElementById('expRowDeleteBtn').style.display='none';
+  }
+  document.getElementById('expRowOverlay').classList.add('open');
+}
+function closeExpRowModal(e){ if(e&&e.target!==e.currentTarget)return; document.getElementById('expRowOverlay').classList.remove('open'); }
+
+function saveExpRow(){
+  const label=document.getElementById('expRowLabel').value.trim();
+  if(!label){ toast('項目名を入力してください','red'); return; }
+  const color=document.getElementById('expRowColor').value;
+  const rows=getExpRows();
+  if(expRowEditKey){
+    const i=rows.findIndex(r=>r.key===expRowEditKey);
+    if(i>=0){ rows[i].label=label; rows[i].color=color; }
+  } else {
+    const key='exp_custom_'+Date.now().toString(36);
+    rows.push({key,label,color});
+    // ensure key exists in all exp data years
+    const d=loadExp();
+    Object.keys(d).forEach(yr=>{ if(!d[yr][key]) d[yr][key]=Array(12).fill(0); });
+    saveExp(d);
+  }
+  saveExpRowsDef(rows);
+  closeExpRowModal();
+  renderExpenses();
+  toast('保存しました');
+}
+
+function deleteExpRow(){
+  if(!expRowEditKey)return;
+  if(!confirm('この項目を削除しますか？（データも削除されます）'))return;
+  const rows=getExpRows().filter(r=>r.key!==expRowEditKey);
+  saveExpRowsDef(rows);
+  closeExpRowModal();
+  renderExpenses();
+  toast('削除しました');
+}
+
+// CF Row modal
+function openCfRowModal(key=null){
+  cfRowEditKey=key;
+  if(key){
+    const row=getCfRows().find(r=>r.key===key);
+    if(!row)return;
+    document.getElementById('cfRowModalTitle').textContent='項目を編集';
+    document.getElementById('cfRowEditKey').value=key;
+    document.getElementById('cfRowLabel').value=row.label;
+    document.getElementById('cfRowColor').value=row.color||'';
+    document.getElementById('cfRowDeleteBtn').style.display='';
+  } else {
+    document.getElementById('cfRowModalTitle').textContent='項目を追加';
+    document.getElementById('cfRowEditKey').value='';
+    document.getElementById('cfRowLabel').value='';
+    document.getElementById('cfRowColor').value='';
+    document.getElementById('cfRowDeleteBtn').style.display='none';
+  }
+  document.getElementById('cfRowOverlay').classList.add('open');
+}
+function closeCfRowModal(e){ if(e&&e.target!==e.currentTarget)return; document.getElementById('cfRowOverlay').classList.remove('open'); }
+
+function saveCfRow(){
+  const label=document.getElementById('cfRowLabel').value.trim();
+  if(!label){ toast('項目名を入力してください','red'); return; }
+  const color=document.getElementById('cfRowColor').value;
+  const rows=getCfRows();
+  if(cfRowEditKey){
+    const i=rows.findIndex(r=>r.key===cfRowEditKey);
+    if(i>=0){ rows[i].label=label; rows[i].color=color; }
+  } else {
+    const key='custom_'+Date.now().toString(36);
+    rows.push({key,label,color});
+    // ensure key exists in all CF data years
+    const d=loadCF();
+    Object.keys(d).forEach(yr=>{ if(!d[yr][key])d[yr][key]=Array(12).fill(null); });
+    saveCF(d);
+  }
+  saveCfRowsDef(rows);
+  closeCfRowModal();
+  renderCashflow();
+  toast('保存しました');
+}
+
+function deleteCfRow(){
+  if(!cfRowEditKey)return;
+  if(!confirm('この項目を削除しますか？（入力済みのデータも削除されます）'))return;
+  const rows=getCfRows().filter(r=>r.key!==cfRowEditKey);
+  saveCfRowsDef(rows);
+  closeCfRowModal();
+  renderCashflow();
+  toast('削除しました');
+}
+
+// ─────────────────────────────────────────────
+// EXPENSES 費用入力
+// ─────────────────────────────────────────────
+const LS_EXP = 'sm_expenses';
+const LS_EXP_ROWS = 'sm_exp_rows';
+const EXP_ROWS_DEFAULT = [
+  {key:'revenue', label:'売上高',          special:'revenue', color:'teal'},
+  {key:'gaichuu', label:'外注費',           color:'red'},
+  {key:'kureka',  label:'経費（クレカ）',    color:'red'},
+  {key:'yakuin',  label:'役員費・社会保険',  color:'red'},
+  {key:'cash',    label:'現金・積み立て',    color:''},
+  {key:'jinken2', label:'人件費2',           color:'red'},
+  {key:'jinken3', label:'人件費3',           color:'red'},
+  {key:'komon',   label:'顧問料',           color:'red'},
+  {key:'yachin',  label:'家賃',             color:'red'},
+  {key:'car',     label:'車',               color:''},
+  {key:'kokoku',  label:'広告',             color:''},
+];
+
+function getExpRows(){
+  try{
+    const r=JSON.parse(localStorage.getItem(LS_EXP_ROWS)||'null');
+    if(r&&r.length) return r;
+  }catch(e){}
+  return JSON.parse(JSON.stringify(EXP_ROWS_DEFAULT));
+}
+function saveExpRowsDef(rows){ localStorage.setItem(LS_EXP_ROWS,JSON.stringify(rows)); }
+
+const EXP_PRESET = {
+  '2023':{revenue:[374,221,465,196,215,192,329,215,378,257,200,214],gaichuu:[42,46,160,63,34,59,170,55,134,59,48,39],kureka:[70,70,60,60,50,60,45,50,47,40,48,68],yakuin:[72,72,72,72,72,72,72,72,65,65,65,65],cash:[20,20,20,20,20,20,20,20,20,20,20,20],jinken2:[33,33,31,31,29,28,28,28,29,29,29,33],jinken3:[0,0,0,0,0,0,0,0,0,0,0,0],komon:[5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2],yachin:[5,5,5,5,4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4],car:[5,5,5,5,5,5,5,5,5,5,5,5],kokoku:[17,17,17,17,18.6,18.6,18.6,18.6,18.6,7,7,7]},
+  '2024':{revenue:[276,351,589,203,131,79,82,227,250,356,601,350],gaichuu:[82,55,135,23,14,23,23,22,128,119,225,60],kureka:[65,65,75,42,65,48,55,62,85,86,180,101],yakuin:[64,64,64,64,64,64,64,64,64,64,64,64],cash:[20,20,20,20,20,12,15,15,20,20,20,15],jinken2:[28,33,34,25,5,0,2,0,0.8,1.5,0,1.5],jinken3:[0,0,0.7,0.7,0,0,0,0,0,0,0,0],komon:[5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2],yachin:[4,4,4,4,4,4,4,4,4,4,4,4],car:[5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5],kokoku:[7,7,7,7,7,7,7,7,7,7,4.5,4.5]},
+  '2025':{revenue:[125,605,280,285,176,149,174,249,230,356,192,120],gaichuu:[41,176,60,45,47,25,21,81,90,118,115,50],kureka:[107,90,75,75,35,40,45,70,40,45,30,60],yakuin:[64,64,64,64,64,64,64,64,64,64,45,45],cash:[15,15,10,15,15,10,10,10,10,10,10,10],jinken2:[0,0,0,0,0,0,0,0,0,0,0,0],jinken3:[1.5,1.5,2.2,1,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],komon:[5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2,5.2],yachin:[4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4,4.4],car:[4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5,4.5],kokoku:[4,4,4,4,4,4,4,4,4,4,0,0]},
+  '2026':{revenue:[25.75,163.25,363.6,103,191.2,144.4,147,650,98,101,0,0],gaichuu:[12,21,74.5,11.3,25,23,7,240,25,25,20,20],kureka:[40,40,40,54.4,50,35,35,35,35,35,35,35],yakuin:[41,41,41,41,51,51,51,51,51,51,51,51],cash:[15,15,15,10,15,15,15,15,15,15,15,15],jinken2:[0,0,0,0,0,0,0,0,0,0,0,0],jinken3:[1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5,1.5],komon:[5.2,5.2,5.2,5.2,3.4,3.4,3.4,3.4,3.4,3.4,3.4,3.4],yachin:[4.4,4.4,4.4,4.4,4.4,0,0,0,0,0,0,0],car:[4.5,4.5,4.5,4.5,3.7,3.6,3.6,3.6,3.6,3.6,3.6,3.6],kokoku:[0,0,0,4,0,0,0,0,0,0,0,0]},
+};
+
+let expYear = new Date().getFullYear().toString();
+
+function loadExp(){
+  try{
+    const d=JSON.parse(localStorage.getItem(LS_EXP)||'{}');
+    // backfill presets
+    Object.keys(EXP_PRESET).forEach(yr=>{
+      if(!d[yr]) d[yr]=JSON.parse(JSON.stringify(EXP_PRESET[yr]));
+    });
+    return d;
+  }catch(e){ return JSON.parse(JSON.stringify(EXP_PRESET)); }
+}
+function saveExp(d){ localStorage.setItem(LS_EXP, JSON.stringify(d)); }
+
+function getExpYears(){
+  const d=loadExp();
+  return [...new Set([...Object.keys(d),...Object.keys(EXP_PRESET),new Date().getFullYear().toString()])].sort((a,b)=>b-a);
+}
+function addExpYear(){
+  const y=prompt('追加する年度を入力（例：2026）');
+  if(!y||!/^\d{4}$/.test(y.trim())){ if(y!==null)alert('4桁の年度を入力してください'); return; }
+  const d=loadExp();
+  if(!d[y]){ d[y]={};EXP_ROWS.forEach(r=>d[y][r.key]=Array(12).fill(0)); saveExp(d); }
+  expYear=y.trim(); renderExpenses(); toast(y+'年度を追加しました');
+}
+
+function expRowColor(c){
+  if(c==='teal') return 'color:var(--teal);font-weight:600';
+  if(c==='red')  return 'color:var(--red)';
+  return 'color:var(--text)';
+}
+
+function renderExpenses(){
+  const years=getExpYears();
+  if(!years.includes(expYear)) expYear=years[0];
+  document.getElementById('expYearTabs').innerHTML=years.map(y=>`<button class="tab${y===expYear?' active':''}" onclick="expYear='${y}';renderExpenses()">${y}年</button>`).join('');
+
+  const d=loadExp();
+  if(!d[expYear]){ d[expYear]={}; EXP_ROWS.forEach(r=>d[expYear][r.key]=Array(12).fill(0)); }
+  const yd=d[expYear];
+
+  // KPIs
+  const rev=Array(12).fill(0).map((_,i)=>+(yd.revenue?.[i]||0));
+  const totalRev=rev.reduce((s,v)=>s+v,0)*10000;
+  const costRows=EXP_ROWS.filter(r=>r.key!=='revenue');
+  const totalCostM=Array(12).fill(0).map((_,i)=>costRows.reduce((s,r)=>s+(+(yd[r.key]?.[i])||0),0));
+  const totalCost=totalCostM.reduce((s,v)=>s+v,0)*10000;
+  const profit=totalRev-totalCost;
+  const rate=totalRev>0?profit/totalRev*100:0;
+  const gaichuuTotal=Array(12).fill(0).map((_,i)=>+(yd.gaichuu?.[i]||0)).reduce((s,v)=>s+v,0)*10000;
+
+  document.getElementById('expKpis').innerHTML=`
+    <div class="kpi k1"><div class="kpi-lbl">年間売上合計</div><div class="kpi-val" style="color:var(--teal)">${yen(totalRev,true)}</div><div class="kpi-sub">${expYear}年</div></div>
+    <div class="kpi k2"><div class="kpi-lbl">年間費用合計</div><div class="kpi-val" style="color:var(--red)">${yen(totalCost,true)}</div><div class="kpi-sub">全費用</div></div>
+    <div class="kpi k3"><div class="kpi-lbl">年間粗利</div><div class="kpi-val" style="color:${profit>=0?'var(--green)':'var(--red)'}">${yen(profit,true)}</div><div class="kpi-sub">粗利率 ${rate.toFixed(1)}%</div></div>
+    <div class="kpi k4"><div class="kpi-lbl">外注費合計</div><div class="kpi-val">${yen(gaichuuTotal,true)}</div><div class="kpi-sub">売上の${totalRev>0?Math.round(gaichuuTotal/totalRev*100):0}%</div></div>
+  `;
+
+  // Table header
+  document.getElementById('expHeaderRow').innerHTML=
+    '<th style="white-space:nowrap;min-width:120px">項目</th>'+
+    MONTHS.map(m=>`<th style="text-align:right;min-width:60px">${m}</th>`).join('')+
+    '<th style="text-align:right;min-width:68px">合計</th>';
+
+  // Table body
+  const body=[];
+  EXP_ROWS.forEach(row=>{
+    const vals=Array(12).fill(0).map((_,i)=>+(yd[row.key]?.[i]||0));
+    const rowTotal=vals.reduce((s,v)=>s+v,0);
+    const isRev=row.special==='revenue';
+    body.push(`<tr${isRev?' style="border-bottom:1px solid var(--border)"':''}>
+      <td style="${expRowColor(row.color)};white-space:nowrap${!isRev?';cursor:pointer':''}" ${!isRev?`onclick="openExpRowModal('${row.key}')" title="クリックで編集"`:""}}>${row.label}${!isRev?'<span style="font-size:9px;opacity:.4;margin-left:3px">✏</span>':''}</td>
+      ${MONTHS.map((_,i)=>`<td style="padding:2px 3px">
+        <input type="number" step="0.1" id="exp_${row.key}_${i}" value="${yd[row.key]?.[i]!=null&&yd[row.key][i]!==0?yd[row.key][i]:''}" placeholder="0"
+          style="width:100%;text-align:right;background:transparent;border:1px solid transparent;border-radius:4px;font-family:'DM Mono',monospace;font-size:12px;padding:3px 4px;outline:none;color:${isRev?'var(--teal)':'var(--text)'}"
+          onfocus="this.style.borderColor='var(--teal)';this.style.background='var(--bg3)'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'"
+          oninput="recalcExp()">
+      </td>`).join('')}
+      <td id="expRowTotal_${row.key}" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;padding:4px 6px;font-weight:500;color:${isRev?'var(--teal)':'var(--text2)'}">${rowTotal.toFixed(rowTotal%1?1:0)}</td>
+    </tr>`);
+  });
+
+  // auto rows: 費用合計, 粗利, 粗利率
+  body.push(`<tr style="border-top:1px solid var(--border2)">
+    <td style="color:var(--text2);white-space:nowrap;font-weight:500">費用合計</td>
+    ${MONTHS.map((_,i)=>`<td id="expCostTotal_${i}" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--red);padding:4px 6px">—</td>`).join('')}
+    <td id="expCostTotalAll" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--red);padding:4px 6px;font-weight:600">—</td>
+  </tr>`);
+  body.push(`<tr>
+    <td style="color:var(--gold);font-weight:600;white-space:nowrap">粗利</td>
+    ${MONTHS.map((_,i)=>`<td id="expProfit_${i}" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;padding:4px 6px;font-weight:600">—</td>`).join('')}
+    <td id="expProfitAll" style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;padding:4px 6px;font-weight:700">—</td>
+  </tr>`);
+  body.push(`<tr>
+    <td style="color:var(--text2);white-space:nowrap">粗利率</td>
+    ${MONTHS.map((_,i)=>`<td id="expRate_${i}" style="text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);padding:4px 6px">—</td>`).join('')}
+    <td id="expRateAll" style="text-align:right;font-family:'DM Mono',monospace;font-size:11px;padding:4px 6px">—</td>
+  </tr>`);
+
+  document.getElementById('expBody').innerHTML=body.join('');
+  recalcExp();
+}
+
+function recalcExp(){
+  const costRows=EXP_ROWS.filter(r=>r.key!=='revenue');
+  let totalRevAll=0,totalCostAll=0;
+
+  MONTHS.forEach((_,i)=>{
+    const rev=+(document.getElementById(`exp_revenue_${i}`)?.value||0);
+    const cost=costRows.reduce((s,r)=>s+(+(document.getElementById(`exp_${r.key}_${i}`)?.value||0)),0);
+    const profit=rev-cost;
+    const rate=rev>0?profit/rev*100:null;
+    totalRevAll+=rev; totalCostAll+=cost;
+
+    const pc=document.getElementById(`expCostTotal_${i}`);
+    if(pc){pc.textContent=cost>0?cost.toFixed(cost%1?1:0):'—';}
+    const pp=document.getElementById(`expProfit_${i}`);
+    if(pp){pp.textContent=(rev>0||cost>0)?(profit>=0?'+':'')+profit.toFixed(profit%1?1:0):'—';pp.style.color=profit>=0?'var(--green)':'var(--red)';}
+    const pr=document.getElementById(`expRate_${i}`);
+    if(pr){pr.textContent=rate!=null?rate.toFixed(1)+'%':'—';pr.style.color=rate!=null&&rate>=0?'var(--green)':'var(--red)';}
+  });
+
+  // row totals
+  EXP_ROWS.forEach(row=>{
+    const vals=MONTHS.map((_,i)=>+(document.getElementById(`exp_${row.key}_${i}`)?.value||0));
+    const t=vals.reduce((s,v)=>s+v,0);
+    const el=document.getElementById(`expRowTotal_${row.key}`);
+    if(el) el.textContent=t>0?t.toFixed(t%1?1:0):'—';
+  });
+
+  const totalProfit=totalRevAll-totalCostAll;
+  const totalRate=totalRevAll>0?totalProfit/totalRevAll*100:null;
+  const cta=document.getElementById('expCostTotalAll');
+  if(cta) cta.textContent=totalCostAll>0?totalCostAll.toFixed(totalCostAll%1?1:0):'—';
+  const pa=document.getElementById('expProfitAll');
+  if(pa){pa.textContent=(totalRevAll>0||totalCostAll>0)?(totalProfit>=0?'+':'')+totalProfit.toFixed(totalProfit%1?1:0):'—';pa.style.color=totalProfit>=0?'var(--green)':'var(--red)';}
+  const ra=document.getElementById('expRateAll');
+  if(ra){ra.textContent=totalRate!=null?totalRate.toFixed(1)+'%':'—';ra.style.color=totalRate!=null&&totalRate>=0?'var(--green)':'var(--red)';}
+}
+
+function saveExpenses(){
+  const d=loadExp();
+  if(!d[expYear]) d[expYear]={};
+  EXP_ROWS.forEach(row=>{
+    d[expYear][row.key]=MONTHS.map((_,i)=>{
+      const el=document.getElementById(`exp_${row.key}_${i}`);
+      return el&&el.value!==''?+el.value:0;
+    });
+  });
+  saveExp(d);
+  const msg=document.getElementById('expSaveMsg');
+  msg.textContent='保存しました ✓'; msg.style.opacity='1';
+  setTimeout(()=>msg.style.opacity='0',2000);
+  toast('費用データを保存しました');
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+initData();
+renderDashboard();
+populateYearFilter();
+</script>
+</body>
+</html>
