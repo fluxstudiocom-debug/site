@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>財務ダッシュボード｜フラックススタジオ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ─────────────────────────────────────────────
+   設定：このパスワードを変えれば認証が変わります
+   ───────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;
+  --text:#1a1a18;--text2:#6b6a65;--text3:#9b9a95;
+  --blue:#1a5fa8;--blue-bg:#ddeaf7;
+  --red:#a83228;--red-bg:#fce8e6;
+  --green:#1a7a4a;--green-bg:#e2f4eb;
+  --amber:#8a5c0a;--amber-bg:#fdf0d8;
+  --r:8px;--rl:14px;
+}
+
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+
+/* ── Login ── */
+#login-screen{position:fixed;inset:0;background:var(--text);display:flex;align-items:center;justify-content:center;z-index:999}
+#login-screen.hidden{display:none}
+.login-box{background:var(--surface);border-radius:var(--rl);padding:2.5rem 2rem;width:320px}
+.login-logo{font-size:11px;letter-spacing:.1em;color:var(--text3);font-family:'IBM Plex Mono',monospace;margin-bottom:8px}
+.login-title{font-size:20px;font-weight:700;margin-bottom:1.5rem}
+.login-box label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px}
+.login-box input[type=password]{width:100%;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--r);font-size:14px;font-family:inherit;outline:none;margin-bottom:1rem}
+.login-box input[type=password]:focus{border-color:var(--blue)}
+.btn-primary{width:100%;padding:11px;background:var(--text);color:#fff;border:none;border-radius:var(--r);font-size:14px;font-family:inherit;font-weight:500;cursor:pointer}
+.btn-primary:hover{opacity:.85}
+.login-err{font-size:12px;color:var(--red);margin-top:8px;min-height:18px}
+
+/* ── App Shell ── */
+#app{display:none}
+#app.visible{display:flex;flex-direction:column;min-height:100vh}
+
+/* ── Topbar ── */
+.topbar{background:var(--text);color:#fff;padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100}
+.topbar-brand{font-size:13px;font-weight:500}
+.topbar-sub{font-size:10px;color:rgba(255,255,255,.4);font-family:'IBM Plex Mono',monospace;margin-top:1px}
+.topbar-nav{display:flex;gap:4px}
+.nav-btn{padding:6px 14px;border-radius:20px;font-size:12px;border:none;background:transparent;color:rgba(255,255,255,.6);cursor:pointer;font-family:inherit;transition:all .15s}
+.nav-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-btn.active{background:rgba(255,255,255,.15);color:#fff}
+.logout-btn{font-size:11px;color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;font-family:inherit;padding:4px 8px}
+.logout-btn:hover{color:rgba(255,255,255,.7)}
+
+/* ── Page container ── */
+.page{display:none;max-width:960px;margin:0 auto;padding:1.5rem}
+.page.active{display:block}
+
+/* ── Section ── */
+.section{margin-bottom:2.5rem}
+.section-title{font-size:11px;font-weight:500;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;font-family:'IBM Plex Mono',monospace;margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:.5px;background:var(--border)}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:1.25rem 1.5rem}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.kpi{background:var(--surface2);border-radius:var(--r);padding:12px}
+.kpi-label{font-size:10px;color:var(--text3);margin-bottom:4px;font-family:'IBM Plex Mono',monospace}
+.kpi-value{font-size:19px;font-weight:700;line-height:1.1}
+.kpi-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.pos{color:var(--blue)}.neg{color:var(--red)}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;gap:6px;margin-bottom:1.25rem;flex-wrap:wrap}
+.tab-btn{font-size:12px;padding:6px 16px;border-radius:20px;border:.5px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.tab-btn:hover{background:var(--surface2)}
+.tab-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* ── Charts ── */
+.chart-wrap{position:relative;width:100%}
+.h260{height:260px}.h300{height:300px}.h320{height:320px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.legend-swatch{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* ── Input Form ── */
+.form-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:10px}
+.year-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.year-tab{padding:6px 14px;border-radius:20px;border:.5px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px;transition:all .15s}
+.year-tab:hover{background:var(--surface2)}
+.year-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.year-tab.new-btn{border-color:var(--blue);color:var(--blue)}
+.year-tab.new-btn:hover{background:var(--blue-bg)}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.form-section-title{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:10px;padding-bottom:6px;border-bottom:.5px solid var(--border);grid-column:1/-1}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:var(--text3);margin-bottom:4px;font-family:'IBM Plex Mono',monospace}
+.field input{width:100%;padding:8px 10px;border:.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;outline:none;background:var(--surface)}
+.field input:focus{border-color:var(--blue)}
+.field .hint{font-size:10px;color:var(--text3);margin-top:3px}
+
+.form-actions{display:flex;gap:10px;margin-top:1.25rem;padding-top:1.25rem;border-top:.5px solid var(--border)}
+.btn-save{padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-family:inherit;font-weight:500;cursor:pointer}
+.btn-save:hover{opacity:.85}
+.btn-delete{padding:10px 16px;background:transparent;color:var(--red);border:.5px solid var(--red-bg);border-radius:var(--r);font-size:12px;font-family:inherit;cursor:pointer}
+.btn-delete:hover{background:var(--red-bg)}
+.save-msg{font-size:12px;color:var(--green);align-self:center;opacity:0;transition:opacity .3s}
+.save-msg.show{opacity:1}
+
+/* ── Risk cards ── */
+.risk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem}
+.risk-count{border-radius:var(--r);padding:12px;text-align:center}
+.rc-label{font-size:10px;font-weight:500;margin-bottom:4px}
+.rc-num{font-size:26px;font-weight:700}
+.rc-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.risk-list{display:flex;flex-direction:column;gap:8px}
+.risk-card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--r);padding:12px 14px;border-left-width:3px}
+.risk-card.high{border-left-color:var(--red)}
+.risk-card.mid{border-left-color:#c78a00}
+.risk-card.low{border-left-color:var(--green)}
+.risk-title{font-size:13px;font-weight:500;margin-bottom:4px}
+.risk-body{font-size:12px;color:var(--text2);line-height:1.6}
+.risk-nums{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.rn{font-size:10px;font-family:'IBM Plex Mono',monospace;background:var(--surface2);border-radius:4px;padding:2px 7px}
+.rn.hi{background:var(--red-bg);color:var(--red)}
+.risk-alert{margin-top:1rem;padding:12px;border:.5px solid #f0a0a0;background:#fff5f5;border-radius:var(--r);font-size:12px;color:#7a2020;line-height:1.6}
+
+/* ── No data ── */
+.no-data{text-align:center;padding:3rem;color:var(--text3)}
+.no-data p{margin-bottom:.5rem}
+.no-data button{margin-top:1rem;padding:8px 20px;border-radius:var(--r);border:.5px solid var(--blue);color:var(--blue);background:transparent;cursor:pointer;font-family:inherit;font-size:13px}
+
+/* ── Responsive ── */
+@media(max-width:600px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .risk-grid{grid-template-columns:1fr}
+  .topbar-nav .nav-btn span.label{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════
+     LOGIN SCREEN
+════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">FLUX STUDIO</div>
+    <div class="login-title">財務ダッシュボード</div>
+    <label>パスワード</label>
+    <input type="password" id="pw-input" placeholder="パスワードを入力" autocomplete="current-password">
+    <button class="btn-primary" onclick="tryLogin()">ログイン</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     APP
+════════════════════════════════ -->
+<div id="app">
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-brand">株式会社フラックススタジオ</div>
+      <div class="topbar-sub">財務分析ダッシュボード</div>
+    </div>
+    <div class="topbar-nav">
+      <button class="nav-btn active" onclick="showPage('dashboard',this)">ダッシュボード</button>
+      <button class="nav-btn" onclick="showPage('entry',this)">データ入力</button>
+      <button class="nav-btn" onclick="showPage('risk',this)">税務リスク</button>
+    </div>
+    <button class="logout-btn" onclick="logout()">ログアウト</button>
+  </div>
+
+  <!-- ── Dashboard ── -->
+  <div class="page active" id="page-dashboard">
+    <div id="dashboard-content"></div>
+  </div>
+
+  <!-- ── Data Entry ── -->
+  <div class="page" id="page-entry">
+    <div class="section">
+      <div class="section-title">年度データ入力</div>
+      <div class="form-header">
+        <div class="year-tabs" id="year-tabs"></div>
+        <button class="year-tab new-btn" onclick="newYear()">＋ 新しい年度を追加</button>
+      </div>
+      <div class="card" id="entry-form-wrap">
+        <div id="entry-form"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Risk ── -->
+  <div class="page" id="page-risk">
+    <div class="section">
+      <div class="section-title">税務リスク診断</div>
+      <div id="risk-content"></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   SETTINGS — ここだけ変更してください
+═══════════════════════════════════════════════════════ */
+const PASSWORD = 'flux2025';          /* ← パスワードを変更 */
+const STORAGE_KEY = 'flux_fin_data';  /* localStorageキー */
+
+/* ═══════════════════════════════════════════════════════
+   INITIAL DATA（R3〜R6 プリセット）
+═══════════════════════════════════════════════════════ */
+const PRESET = [
+  {
+    id:'R3', label:'R3（令和3年4月期）',
+    revenue:40867653, net_income:2908904, ordinary:3540622,
+    sga_total:40384252,
+    jinken:9560532, gaichuu:12366723, genka:2423684,
+    ryohi:2712360, kousai:2929810, tesuuryou:415226, other_sga:9975917,
+    assets:19832392, liab:15022475, equity:4809917, lt_debt:5000000,
+    misc_income:3138881
+  },
+  {
+    id:'R4', label:'R4（令和4年4月期）',
+    revenue:49755227, net_income:-1577610, ordinary:-1506585,
+    sga_total:54565128,
+    jinken:16806499, gaichuu:18256152, genka:3203132,
+    ryohi:1844812, kousai:1905311, tesuuryou:504485, other_sga:12044737,
+    assets:25407764, liab:22175457, equity:3232307, lt_debt:13754600,
+    misc_income:3534569
+  },
+  {
+    id:'R5', label:'R5（令和5年4月期）',
+    revenue:32200221, net_income:-2615825, ordinary:-2548927,
+    sga_total:40186447,
+    jinken:11614991, gaichuu:11208932, genka:2286387,
+    ryohi:2104717, kousai:2518984, tesuuryou:2660523, other_sga:7791913,
+    assets:26461916, liab:25845434, equity:616482, lt_debt:20575800,
+    misc_income:5729829
+  },
+  {
+    id:'R6', label:'R6（令和6年4月期）',
+    revenue:40127459, net_income:2284234, ordinary:2355324,
+    sga_total:33031172,
+    jinken:5899428, gaichuu:14147938, genka:2015343,
+    ryohi:1822184, kousai:1366013, tesuuryou:1796819, other_sga:5983447,
+    assets:25953697, liab:23052981, equity:2900716, lt_debt:19183800,
+    misc_income:1134579
+  }
+];
+
+/* ═══════════════════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════════════════ */
+function tryLogin(){
+  const v = document.getElementById('pw-input').value;
+  if(v === PASSWORD){
+    sessionStorage.setItem('flux_auth','1');
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    initApp();
+  } else {
+    document.getElementById('login-err').textContent = 'パスワードが違います';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+}
+document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') tryLogin(); });
+function logout(){
+  sessionStorage.removeItem('flux_auth');
+  location.reload();
+}
+if(sessionStorage.getItem('flux_auth')==='1'){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.add('visible');
+  initApp();
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA LAYER
+═══════════════════════════════════════════════════════ */
+function loadData(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw) return JSON.parse(raw);
+  const d = JSON.parse(JSON.stringify(PRESET));
+  saveData(d);
+  return d;
+}
+function saveData(d){ localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); }
+function getData(){ return loadData(); }
+
+/* ═══════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════ */
+const fmtM = v => {
+  const abs = Math.round(Math.abs(v)/10000);
+  return (v < 0 ? '△' : '+') + abs.toLocaleString() + '万円';
+};
+const fmtRate = v => (v < 0 ? '△' : '+') + Math.abs(v).toFixed(1) + '%';
+const ordRate = d => d.revenue > 0 ? (d.ordinary/d.revenue*100) : 0;
+const gc = 'rgba(0,0,0,0.06)', tc = '#9b9a95';
+Chart.defaults.font.family = "'Noto Sans JP',sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = tc;
+const charts = {};
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════ */
+function showPage(id, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='dashboard') renderDashboard();
+  if(id==='entry')    renderEntry();
+  if(id==='risk')     renderRisk();
+}
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+function initApp(){ renderDashboard(); }
+
+/* ═══════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════ */
+function renderDashboard(){
+  const data = getData();
+  if(!data.length){
+    document.getElementById('dashboard-content').innerHTML =
+      '<div class="no-data"><p>データがありません。</p><p>「データ入力」から年度を追加してください。</p><button onclick="showPage(\'entry\',document.querySelectorAll(\'.nav-btn\')[1])">データ入力へ</button></div>';
+    return;
+  }
+  const labels = data.map(d=>d.id);
+  const revenue = data.map(d=>d.revenue);
+  const sga     = data.map(d=>d.sga_total);
+  const ord     = data.map(d=>d.ordinary);
+  const net     = data.map(d=>d.net_income);
+  const assets  = data.map(d=>d.assets);
+  const liab    = data.map(d=>d.liab);
+  const equity  = data.map(d=>d.equity);
+  const ltdebt  = data.map(d=>d.lt_debt);
+
+  const latest = data[data.length-1];
+  const kpiHtml = data.slice(-4).map(d => {
+    const isPos = d.net_income >= 0;
+    return `<div class="kpi">
+      <div class="kpi-label">${d.label||d.id} 当期純損益</div>
+      <div class="kpi-value ${isPos?'pos':'neg'}">${fmtM(d.net_income)}</div>
+      <div class="kpi-sub">経常利益率 ${fmtRate(ordRate(d))}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('dashboard-content').innerHTML = `
+  <div class="section">
+    <div class="section-title">01 — 損益サマリー</div>
+    <div class="kpi-grid">${kpiHtml}</div>
+    <div class="card">
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('pl',this)">損益推移</button>
+        <button class="tab-btn" onclick="switchTab('bs',this)">貸借対照表</button>
+      </div>
+      <div id="pl" class="tab-content active">
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#378ADD"></span>売上高</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#D85A30"></span>販管費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#1D9E75"></span>経常利益（折線）</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#B5D4F4"></span>当期純損益</span>
+        </div>
+        <div class="chart-wrap h300"><canvas id="plChart"></canvas></div>
+      </div>
+      <div id="bs" class="tab-content">
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#378ADD"></span>資産合計</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#D85A30"></span>負債合計</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#1D9E75"></span>純資産</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#BA7517"></span>長期借入金（折線）</span>
+        </div>
+        <div class="chart-wrap h300"><canvas id="bsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">02 — 販管費内訳</div>
+    <div class="card">
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('sgaA',this)">積み上げ</button>
+        <button class="tab-btn" onclick="switchTab('sgaB',this)">構成比</button>
+      </div>
+      <div id="sgaA" class="tab-content active">
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:#378ADD"></span>人件費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#D85A30"></span>外注費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#1D9E75"></span>減価償却費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#BA7517"></span>旅費交通費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#7F77DD"></span>交際費</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#D4537E"></span>支払手数料</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#888780"></span>その他</span>
+        </div>
+        <div class="chart-wrap h320"><canvas id="sgaChart"></canvas></div>
+      </div>
+      <div id="sgaB" class="tab-content">
+        <div class="chart-wrap h320"><canvas id="sgaRatioChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">03 — 業界平均との比較</div>
+    <div class="card">
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch" style="background:#378ADD"></span>自社 経常利益率</span>
+        <span class="legend-item" style="gap:6px"><span style="display:inline-block;width:18px;height:0;border-top:2px dashed #1D9E75"></span>黒字企業平均 +6%</span>
+        <span class="legend-item" style="gap:6px"><span style="display:inline-block;width:18px;height:0;border-top:2px dotted #BA7517"></span>業界中央値 +1.5%</span>
+        <span class="legend-item" style="gap:6px"><span style="display:inline-block;width:18px;height:0;border-top:2px solid #E24B4A"></span>全体平均 −9%</span>
+      </div>
+      <div class="chart-wrap h260"><canvas id="benchChart"></canvas></div>
+    </div>
+  </div>
+  `;
+
+  /* ── PL chart ── */
+  destroyChart('plChart');
+  charts['plChart'] = new Chart(document.getElementById('plChart'),{
+    type:'bar', data:{ labels,
+      datasets:[
+        {label:'売上高', data:revenue, backgroundColor:'#378ADD', borderRadius:3, borderSkipped:false},
+        {label:'販管費', data:sga,     backgroundColor:'#D85A30', borderRadius:3, borderSkipped:false},
+        {label:'経常利益',data:ord, type:'line', borderColor:'#1D9E75', backgroundColor:'transparent', borderWidth:2, borderDash:[5,3], pointBackgroundColor:'#1D9E75', pointRadius:4},
+        {label:'当期純損益',data:net, backgroundColor:net.map(v=>v>=0?'#B5D4F4':'#F7C1C1'), borderRadius:3, borderSkipped:false},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y<0?'△':'')+Math.round(Math.abs(c.parsed.y)/10000).toLocaleString()+'万'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}}, y:{grid:{color:gc},ticks:{color:tc,callback:v=>Math.round(v/10000).toLocaleString()+'万'}}}
+    }
+  });
+
+  /* ── BS chart ── */
+  destroyChart('bsChart');
+  charts['bsChart'] = new Chart(document.getElementById('bsChart'),{
+    type:'bar', data:{labels, datasets:[
+      {label:'資産合計',data:assets,backgroundColor:'#378ADD',borderRadius:3},
+      {label:'負債合計',data:liab,backgroundColor:'#D85A30',borderRadius:3},
+      {label:'純資産',data:equity,backgroundColor:'#1D9E75',borderRadius:3},
+      {label:'長期借入金',data:ltdebt,type:'line',borderColor:'#BA7517',backgroundColor:'transparent',borderWidth:2,borderDash:[5,3],pointBackgroundColor:'#BA7517',pointRadius:4},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.round(c.parsed.y/10000).toLocaleString()+'万'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>Math.round(v/10000).toLocaleString()+'万'}}}
+    }
+  });
+
+  /* ── SGA Stack ── */
+  const sgaKeys = ['jinken','gaichuu','genka','ryohi','kousai','tesuuryou','other_sga'];
+  const sgaNames= ['人件費','外注費','減価償却費','旅費交通費','交際費','支払手数料','その他'];
+  const sgaColors=['#378ADD','#D85A30','#1D9E75','#BA7517','#7F77DD','#D4537E','#888780'];
+  const sgaDatasets = sgaKeys.map((k,ci)=>({
+    label:sgaNames[ci], data:data.map(d=>d[k]||0),
+    backgroundColor:sgaColors[ci], borderWidth:0,
+    borderRadius:ci===sgaKeys.length-1?{topLeft:3,topRight:3}:0
+  }));
+  destroyChart('sgaChart');
+  charts['sgaChart'] = new Chart(document.getElementById('sgaChart'),{
+    type:'bar', data:{labels,datasets:sgaDatasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+Math.round(c.parsed.y/10000).toLocaleString()+'万'}}},
+      scales:{x:{stacked:true,grid:{color:gc},ticks:{color:tc}},y:{stacked:true,grid:{color:gc},ticks:{color:tc,callback:v=>Math.round(v/10000)+'万'}}}
+    }
+  });
+
+  /* ── SGA Ratio ── */
+  const sgaRatioDS = sgaKeys.map((k,ci)=>({
+    label:sgaNames[ci],
+    data:data.map(d=>d[k]&&d.sga_total?Math.round(d[k]/d.sga_total*1000)/10:0),
+    backgroundColor:sgaColors[ci],borderWidth:0
+  }));
+  destroyChart('sgaRatioChart');
+  charts['sgaRatioChart'] = new Chart(document.getElementById('sgaRatioChart'),{
+    type:'bar', data:{labels,datasets:sgaRatioDS},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}},
+      scales:{x:{stacked:true,grid:{color:gc},ticks:{color:tc}},y:{stacked:true,max:100,grid:{color:gc},ticks:{color:tc,callback:v=>v+'%'}}}
+    }
+  });
+
+  /* ── Benchmark ── */
+  const selfRates = data.map(d=>ordRate(d));
+  destroyChart('benchChart');
+  charts['benchChart'] = new Chart(document.getElementById('benchChart'),{
+    type:'line',
+    data:{labels, datasets:[
+      {label:'自社',data:selfRates,borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.08)',fill:true,tension:0.3,pointRadius:6,pointBackgroundColor:selfRates.map(v=>v>=0?'#378ADD':'#E24B4A'),pointBorderColor:selfRates.map(v=>v>=0?'#378ADD':'#E24B4A'),borderWidth:2},
+      {label:'黒字企業平均',data:data.map(()=>6),borderColor:'#1D9E75',borderDash:[6,4],borderWidth:1.5,pointRadius:0},
+      {label:'中央値',data:data.map(()=>1.5),borderColor:'#BA7517',borderDash:[3,3],borderWidth:1.5,pointRadius:0},
+      {label:'全体平均',data:data.map(()=>-9),borderColor:'#E24B4A',borderDash:[2,4],borderWidth:1.5,pointRadius:0},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'bottom',labels:{font:{size:10},padding:10,usePointStyle:true,pointStyleWidth:8}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}
+      },
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>v.toFixed(0)+'%'},suggestedMin:-14,suggestedMax:14}}
+    }
+  });
+}
+
+function switchTab(id, btn){
+  const card = btn.closest('.card');
+  card.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+  card.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA ENTRY
+═══════════════════════════════════════════════════════ */
+let currentYearId = null;
+
+function renderEntry(){
+  const data = getData();
+  const tabsEl = document.getElementById('year-tabs');
+  tabsEl.innerHTML = data.map(d =>
+    `<button class="year-tab${d.id===currentYearId?' active':''}" onclick="selectYear('${d.id}')">${d.id}</button>`
+  ).join('');
+  if(!currentYearId && data.length) currentYearId = data[data.length-1].id;
+  if(currentYearId) renderForm(currentYearId);
+}
+
+function selectYear(id){
+  currentYearId = id;
+  renderEntry();
+}
+
+function newYear(){
+  const data = getData();
+  const id = prompt('新しい年度名を入力してください（例：R7）');
+  if(!id || !id.trim()) return;
+  const trimmed = id.trim();
+  if(data.find(d=>d.id===trimmed)){ alert('その年度は既に存在します'); return; }
+  const blank = {
+    id:trimmed, label:trimmed+'年度',
+    revenue:0,net_income:0,ordinary:0,sga_total:0,
+    jinken:0,gaichuu:0,genka:0,ryohi:0,kousai:0,tesuuryou:0,other_sga:0,
+    assets:0,liab:0,equity:0,lt_debt:0,misc_income:0
+  };
+  data.push(blank);
+  saveData(data);
+  currentYearId = trimmed;
+  renderEntry();
+}
+
+function renderForm(id){
+  const data = getData();
+  const d = data.find(x=>x.id===id);
+  if(!d){ document.getElementById('entry-form').innerHTML=''; return; }
+
+  const f = (key, label, hint='') => `
+    <div class="field">
+      <label>${label}</label>
+      <input type="number" id="f_${key}" value="${d[key]||0}" oninput="autoCalc()">
+      ${hint?`<div class="hint">${hint}</div>`:''}
+    </div>`;
+
+  document.getElementById('entry-form').innerHTML = `
+  <div class="form-grid">
+    <div class="form-section-title">基本情報</div>
+    <div class="field">
+      <label>年度ラベル（表示名）</label>
+      <input type="text" id="f_label" value="${d.label||d.id}">
+    </div>
+    <div></div>
+
+    <div class="form-section-title">損益計算書</div>
+    ${f('revenue','売上高（円）')}
+    ${f('misc_income','雑収入（円）','営業外収益の雑収入')}
+    ${f('ordinary','経常利益（円）','赤字の場合はマイナス値')}
+    ${f('net_income','当期純利益（円）','赤字の場合はマイナス値')}
+
+    <div class="form-section-title">販売費及び一般管理費</div>
+    ${f('jinken','人件費（役員報酬含む）')}
+    ${f('gaichuu','外注費')}
+    ${f('genka','減価償却費')}
+    ${f('ryohi','旅費交通費')}
+    ${f('kousai','交際費')}
+    ${f('tesuuryou','支払手数料')}
+    ${f('other_sga','その他経費合計','上記以外の販管費すべて')}
+
+    <div class="form-section-title">貸借対照表</div>
+    ${f('assets','資産合計')}
+    ${f('liab','負債合計')}
+    ${f('equity','純資産合計')}
+    ${f('lt_debt','長期借入金')}
+  </div>
+
+  <div id="sga-hint" style="font-size:11px;color:var(--text3);margin-top:8px;padding:8px;background:var(--surface2);border-radius:var(--r)">
+    販管費合計（自動計算）：<strong id="sga-auto">—</strong>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn-save" onclick="saveYear('${id}')">保存する</button>
+    ${data.length > 1 ? `<button class="btn-delete" onclick="deleteYear('${id}')">この年度を削除</button>` : ''}
+    <span class="save-msg" id="save-msg">保存しました ✓</span>
+  </div>
+  `;
+  autoCalc();
+}
+
+function autoCalc(){
+  const keys = ['jinken','gaichuu','genka','ryohi','kousai','tesuuryou','other_sga'];
+  const total = keys.reduce((s,k)=>{ const el=document.getElementById('f_'+k); return s+(el?+el.value:0); },0);
+  const el = document.getElementById('sga-auto');
+  if(el) el.textContent = Math.round(total/10000).toLocaleString()+'万円';
+}
+
+function saveYear(id){
+  const data = getData();
+  const idx = data.findIndex(d=>d.id===id);
+  if(idx<0) return;
+  const keys = ['label','revenue','misc_income','ordinary','net_income',
+    'jinken','gaichuu','genka','ryohi','kousai','tesuuryou','other_sga',
+    'assets','liab','equity','lt_debt'];
+  keys.forEach(k=>{
+    const el = document.getElementById('f_'+k);
+    if(!el) return;
+    data[idx][k] = el.type==='number' ? +el.value : el.value;
+  });
+  const sgaKeys = ['jinken','gaichuu','genka','ryohi','kousai','tesuuryou','other_sga'];
+  data[idx].sga_total = sgaKeys.reduce((s,k)=>s+(data[idx][k]||0),0);
+  saveData(data);
+  const msg = document.getElementById('save-msg');
+  msg.classList.add('show');
+  setTimeout(()=>msg.classList.remove('show'),2000);
+}
+
+function deleteYear(id){
+  if(!confirm(`「${id}」のデータを削除しますか？`)) return;
+  let data = getData();
+  data = data.filter(d=>d.id!==id);
+  saveData(data);
+  currentYearId = data.length ? data[data.length-1].id : null;
+  renderEntry();
+}
+
+/* ═══════════════════════════════════════════════════════
+   RISK PAGE
+═══════════════════════════════════════════════════════ */
+function renderRisk(){
+  const data = getData();
+  if(!data.length){
+    document.getElementById('risk-content').innerHTML = '<div class="no-data"><p>データがありません。</p></div>';
+    return;
+  }
+
+  /* 自動判定 */
+  const risks = [];
+  data.forEach(d=>{
+    const miscRate = d.revenue>0 ? d.misc_income/d.revenue*100 : 0;
+    if(miscRate > 10) risks.push({level:'high',
+      title:`雑収入が売上高の${miscRate.toFixed(1)}%（${d.id}）`,
+      body:'売上の10%超の雑収入は税務調査で内容の説明を求められる可能性が高い。補助金・助成金・保険金等の根拠資料を整備しておくこと。',
+      nums:[{label:`${d.id} 雑収入`,val:Math.round(d.misc_income/10000)+'万円',hi:true}]
+    });
+    if(d.ordinary<0 && d.jinken>8000000) risks.push({level:'high',
+      title:`赤字年度に高額役員報酬（${d.id}）`,
+      body:`営業損失が出ているにもかかわらず役員報酬${Math.round(d.jinken/10000)}万円を計上。「過大役員給与」として損金不算入を指摘されるリスクがある。`,
+      nums:[{label:`${d.id} 役員報酬等`,val:Math.round(d.jinken/10000)+'万円',hi:true}]
+    });
+    if(d.gaichuu > 10000000) risks.push({level:'high',
+      title:`外注費が${Math.round(d.gaichuu/10000)}万円（${d.id}）`,
+      body:'大口外注費は架空外注疑いで必ず確認される。契約書・請求書・振込明細・成果物を一式保管しておくこと。個人への支払いは源泉徴収漏れも要確認。',
+      nums:[{label:`${d.id} 外注費`,val:Math.round(d.gaichuu/10000)+'万円',hi:true}]
+    });
+  });
+
+  /* 固定リスク */
+  const fixed = [
+    {level:'high', title:'取締役への貸付金（R6）',
+      body:'貸付金79万円＝取締役等への金銭債権が個別注記に明記。認定利息（適正利率相当の経済的利益）を計上しないと役員賞与として課税される。',
+      nums:[{label:'R6残高',val:'79万円',hi:true}]},
+    {level:'mid', title:'交際費の領収書管理',
+      body:'中小企業は800万円まで全額損金可能だが、接待相手・目的・領収書の保存が必須。会議費との区別も含め証拠書類を整備すること。',nums:[]},
+    {level:'mid', title:'消耗品費の資産計上確認',
+      body:'R3の消耗品費379万円は突出して高い。10万円以上の備品を費用処理していないか確認が必要。',nums:[]},
+    {level:'low', title:'売上変動は業界背景で説明可能',
+      body:'売上の変動（コロナ禍の影響等）には業界的な背景があり、不自然な隠蔽の痕跡はない。',nums:[]},
+    {level:'low', title:'減価償却は適正に実施',
+      body:'各期とも減価償却費が計上されており、固定資産の恣意的な操作は見受けられない。',nums:[]},
+    {level:'low', title:'消費税は税抜処理で一貫',
+      body:'個別注記に税抜方式と明記されており、未払消費税も適切に負債計上されている。',nums:[]},
+  ];
+
+  const allRisks = [...risks, ...fixed];
+  const hi = allRisks.filter(r=>r.level==='high').length;
+  const mid = allRisks.filter(r=>r.level==='mid').length;
+  const low = allRisks.filter(r=>r.level==='low').length;
+
+  const riskCard = r => `
+    <div class="risk-card ${r.level}">
+      <div class="risk-title">${r.title}</div>
+      <div class="risk-body">${r.body}</div>
+      ${r.nums.length ? `<div class="risk-nums">${r.nums.map(n=>`<span class="rn${n.hi?' hi':''}">${n.label}：${n.val}</span>`).join('')}</div>` : ''}
+    </div>`;
+
+  document.getElementById('risk-content').innerHTML = `
+    <div class="risk-grid">
+      <div class="risk-count" style="background:var(--red-bg)">
+        <div class="rc-label" style="color:var(--red)">要注意（高リスク）</div>
+        <div class="rc-num" style="color:var(--red)">${hi}</div>
+        <div class="rc-sub">税務調査で必ず確認</div>
+      </div>
+      <div class="risk-count" style="background:var(--amber-bg)">
+        <div class="rc-label" style="color:var(--amber)">確認推奨（中リスク）</div>
+        <div class="rc-num" style="color:var(--amber)">${mid}</div>
+        <div class="rc-sub">証憑・根拠を整備推奨</div>
+      </div>
+      <div class="risk-count" style="background:var(--green-bg)">
+        <div class="rc-label" style="color:var(--green)">問題なし（低リスク）</div>
+        <div class="rc-num" style="color:var(--green)">${low}</div>
+        <div class="rc-sub">適正処理</div>
+      </div>
+    </div>
+    <div class="risk-list">
+      ${allRisks.map(riskCard).join('')}
+    </div>
+    <div class="risk-alert" style="margin-top:1rem">
+      <strong>総合評価：</strong>
+      「雑収入の内容と根拠」「赤字期の役員報酬の相当性」「外注費の証憑一式」の3点は税務調査で確実に確認される論点。
+      担当税理士と事前に説明ロジックと証拠書類を整理しておくことを推奨。
+      <br><br>
+      ※ 新しい年度のデータを入力すると、リスク判定が自動で更新されます。
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
