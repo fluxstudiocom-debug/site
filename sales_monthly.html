@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>月次売上管理｜フラックススタジオ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e2e0d8;
+  --text:#1a1a18;--text2:#6b6a65;--text3:#9b9a95;
+  --blue:#1a5fa8;--blue-bg:#ddeaf7;
+  --red:#a83228;--red-bg:#fce8e6;
+  --green:#1a7a4a;--green-bg:#e2f4eb;
+  --r:8px;--rl:14px;
+}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+
+/* Login */
+#login-screen{position:fixed;inset:0;background:var(--text);display:flex;align-items:center;justify-content:center;z-index:999}
+#login-screen.hidden{display:none}
+.login-box{background:var(--surface);border-radius:var(--rl);padding:2.5rem 2rem;width:320px}
+.login-logo{font-size:11px;letter-spacing:.1em;color:var(--text3);font-family:'IBM Plex Mono',monospace;margin-bottom:8px}
+.login-title{font-size:20px;font-weight:700;margin-bottom:6px}
+.login-sub{font-size:12px;color:var(--text3);margin-bottom:1.5rem}
+.login-box label{font-size:12px;color:var(--text2);display:block;margin-bottom:4px}
+.login-box input[type=password]{width:100%;padding:10px 12px;border:.5px solid var(--border);border-radius:var(--r);font-size:14px;font-family:inherit;outline:none;margin-bottom:1rem}
+.login-box input[type=password]:focus{border-color:var(--blue)}
+.btn-primary{width:100%;padding:11px;background:var(--text);color:#fff;border:none;border-radius:var(--r);font-size:14px;font-family:inherit;font-weight:500;cursor:pointer}
+.btn-primary:hover{opacity:.85}
+.login-err{font-size:12px;color:var(--red);margin-top:8px;min-height:18px}
+
+/* App */
+#app{display:none}
+#app.visible{display:flex;flex-direction:column;min-height:100vh}
+
+/* Topbar */
+.topbar{background:var(--text);color:#fff;padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100}
+.topbar-brand{font-size:13px;font-weight:500}
+.topbar-sub{font-size:10px;color:rgba(255,255,255,.4);font-family:'IBM Plex Mono',monospace}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.logout-btn{font-size:11px;color:rgba(255,255,255,.4);background:none;border:none;cursor:pointer;font-family:inherit;padding:4px 8px}
+.logout-btn:hover{color:rgba(255,255,255,.7)}
+
+/* Tabs */
+.page-tabs{background:var(--surface);border-bottom:.5px solid var(--border);padding:0 1.5rem;display:flex;gap:0}
+.page-tab{padding:12px 18px;font-size:13px;border:none;background:none;cursor:pointer;font-family:inherit;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.page-tab:hover{color:var(--text)}
+.page-tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:500}
+
+/* Container */
+.page{display:none;max-width:1000px;margin:0 auto;padding:1.5rem}
+.page.active{display:block}
+
+/* Section */
+.section{margin-bottom:2rem}
+.section-title{font-size:11px;font-weight:500;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;font-family:'IBM Plex Mono',monospace;margin-bottom:1rem;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:.5px;background:var(--border)}
+
+/* Cards */
+.card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:1.25rem 1.5rem;margin-bottom:1rem}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
+.kpi{background:var(--surface2);border-radius:var(--r);padding:12px}
+.kpi-label{font-size:10px;color:var(--text3);margin-bottom:4px;font-family:'IBM Plex Mono',monospace}
+.kpi-value{font-size:18px;font-weight:700;line-height:1.2}
+.kpi-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.pos{color:var(--blue)}.neg{color:var(--red)}
+
+/* Year selector */
+.year-bar{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap}
+.year-btn{padding:6px 16px;border-radius:20px;border:.5px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px;transition:all .15s}
+.year-btn:hover{background:var(--surface2)}
+.year-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+.year-label{font-size:12px;color:var(--text2)}
+
+/* Chart */
+.chart-wrap{position:relative;width:100%;height:300px}
+.chart-wrap-tall{position:relative;width:100%;height:360px}
+
+/* Entry table */
+.entry-table-wrap{overflow-x:auto}
+.entry-table{width:100%;border-collapse:collapse;font-size:12px;min-width:900px}
+.entry-table th{text-align:center;padding:8px 6px;background:var(--surface2);border:.5px solid var(--border);font-weight:500;color:var(--text2);white-space:nowrap;position:sticky;top:0}
+.entry-table th:first-child{text-align:left;min-width:100px}
+.entry-table td{padding:4px 4px;border:.5px solid var(--border);text-align:center}
+.entry-table td:first-child{text-align:left;padding:4px 8px;color:var(--text2);font-weight:500;white-space:nowrap;background:var(--surface2)}
+.entry-table input{width:100%;padding:5px 6px;border:.5px solid transparent;border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;text-align:right;background:transparent;outline:none}
+.entry-table input:focus{border-color:var(--blue);background:var(--blue-bg)}
+.entry-table tr.revenue td{background:#f0f6ff}
+.entry-table tr.profit td{background:#f5fff8}
+.entry-table tr.profit.neg-row td{background:#fff5f5}
+.entry-table .calc-cell{font-family:'IBM Plex Mono',monospace;font-weight:500;background:var(--surface2) !important}
+.entry-table .calc-cell.pos{color:var(--blue)}
+.entry-table .calc-cell.neg{color:var(--red)}
+.row-label-cost{color:var(--text3) !important;font-weight:400 !important}
+
+/* Action bar */
+.action-bar{display:flex;gap:10px;align-items:center;margin-top:1rem;padding-top:1rem;border-top:.5px solid var(--border);flex-wrap:wrap}
+.btn-save{padding:9px 22px;background:var(--blue);color:#fff;border:none;border-radius:var(--r);font-size:13px;font-family:inherit;font-weight:500;cursor:pointer}
+.btn-save:hover{opacity:.85}
+.btn-add-year{padding:9px 18px;background:transparent;color:var(--text2);border:.5px solid var(--border);border-radius:var(--r);font-size:13px;font-family:inherit;cursor:pointer}
+.btn-add-year:hover{background:var(--surface2)}
+.save-msg{font-size:12px;color:var(--green);opacity:0;transition:opacity .3s}
+.save-msg.show{opacity:1}
+
+/* Legend */
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.ls{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* Compare */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+@media(max-width:650px){
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .compare-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">FLUX STUDIO</div>
+    <div class="login-title">月次売上管理</div>
+    <div class="login-sub">フラックススタジオ</div>
+    <label>パスワード</label>
+    <input type="password" id="pw-input" placeholder="パスワードを入力" autocomplete="current-password">
+    <button class="btn-primary" onclick="tryLogin()">ログイン</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-brand">株式会社フラックススタジオ</div>
+      <div class="topbar-sub">月次売上管理システム</div>
+    </div>
+    <div class="topbar-right">
+      <button class="logout-btn" onclick="logout()">ログアウト</button>
+    </div>
+  </div>
+
+  <div class="page-tabs">
+    <button class="page-tab active" onclick="showPage('dashboard',this)">ダッシュボード</button>
+    <button class="page-tab" onclick="showPage('entry',this)">データ入力</button>
+    <button class="page-tab" onclick="showPage('compare',this)">年度比較</button>
+  </div>
+
+  <div class="page active" id="page-dashboard"></div>
+  <div class="page" id="page-entry"></div>
+  <div class="page" id="page-compare"></div>
+</div>
+
+<script>
+/* ─── 設定 ─── */
+const PASSWORD = 'flux2025';
+const STORAGE_KEY = 'flux_sales_v1';
+const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const COST_ROWS = [
+  {key:'gaichuu', label:'外注費'},
+  {key:'kureka',  label:'経費（クレカ）'},
+  {key:'yakuin',  label:'役員費・社会保険'},
+  {key:'cash',    label:'現金・積み立て'},
+  {key:'jinken2', label:'人件費2'},
+  {key:'jinken3', label:'人件費3'},
+  {key:'komon',   label:'顧問料'},
+  {key:'yachin',  label:'家賃'},
+  {key:'car',     label:'車'},
+  {key:'kokoku',  label:'広告'},
+];
+
+/* ─── 初期データ（Excelから読み取り）─── */
+const PRESET = {
+  '2023':{
+    revenue:[3740000,2210000,4650000,1960000,2150000,1920000,3290000,2150000,3780000,2570000,1995000,2140000],
+    gaichuu:[420000,460000,1600000,634000,342000,590000,1700000,550000,1340000,586000,480000,390000],
+    kureka:[700000,700000,600000,600000,500000,600000,450000,500000,465000,400000,480000,680000],
+    yakuin:[720000,720000,720000,720000,720000,720000,720000,720000,650000,650000,650000,650000],
+    cash:[200000,200000,200000,200000,200000,200000,200000,200000,200000,200000,200000,200000],
+    jinken2:[330000,330000,308000,308000,290000,280000,280000,280000,290000,290000,290000,328000],
+    jinken3:[0,0,0,0,0,0,0,0,0,0,0,0],
+    komon:[52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000],
+    yachin:[50000,50000,50000,50000,44000,44000,44000,44000,44000,44000,44000,44000],
+    car:[50000,50000,50000,50000,50000,50000,50000,50000,50000,50000,50000,50000],
+    kokoku:[170000,170000,170000,170000,186000,186000,186000,186000,186000,70000,70000,70000],
+  },
+  '2024':{
+    revenue:[2760000,3510000,5890000,2033000,1310000,790000,820000,2274000,2500000,3560000,6010000,3500000],
+    gaichuu:[820000,550000,1350000,225000,136000,230000,230000,220000,1280000,1190000,2250000,600000],
+    kureka:[650000,650000,750000,420000,650000,480000,550000,615000,850000,860000,1800000,1010000],
+    yakuin:[640000,640000,640000,640000,640000,640000,640000,640000,640000,640000,640000,640000],
+    cash:[200000,200000,200000,200000,200000,120000,150000,150000,200000,200000,200000,150000],
+    jinken2:[275000,330000,340000,247000,50000,0,20000,0,8000,15000,0,15000],
+    jinken3:[0,0,7000,7000,0,0,0,0,0,0,0,0],
+    komon:[52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000],
+    yachin:[40000,40000,40000,40000,40000,40000,40000,40000,40000,40000,40000,40000],
+    car:[50000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000],
+    kokoku:[70000,70000,70000,70000,70000,70000,70000,70000,70000,70000,45000,45000],
+  },
+  '2025':{
+    revenue:[1250000,6050000,2800000,2850000,1760000,1490000,1740000,2490000,2300000,3560000,1920000,1200000],
+    gaichuu:[410000,1760000,600000,450000,470000,250000,210000,810000,900000,1180000,1150000,500000],
+    kureka:[1070000,900000,750000,750000,350000,400000,450000,700000,400000,450000,300000,600000],
+    yakuin:[640000,640000,640000,640000,640000,640000,640000,640000,640000,640000,450000,450000],
+    cash:[150000,150000,100000,150000,150000,100000,100000,100000,100000,100000,100000,100000],
+    jinken2:[0,0,0,0,0,0,0,0,0,0,0,0],
+    jinken3:[15000,15000,22000,10000,15000,15000,15000,15000,15000,15000,15000,15000],
+    komon:[52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000,52000],
+    yachin:[44000,44000,44000,44000,44000,44000,44000,44000,44000,44000,44000,44000],
+    car:[45000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000],
+    kokoku:[40000,40000,40000,40000,40000,40000,40000,40000,40000,40000,0,0],
+  },
+  '2026':{
+    revenue:[260000,1640000,3070000,1030000,1890000,1440000,780000,5980000,1280000,1280000,840000,850000],
+    gaichuu:[120000,210000,745000,113000,250000,230000,70000,2400000,250000,250000,200000,200000],
+    kureka:[400000,400000,400000,544000,500000,350000,350000,350000,350000,350000,350000,350000],
+    yakuin:[410000,410000,410000,410000,510000,510000,510000,510000,510000,510000,510000,510000],
+    cash:[150000,150000,150000,100000,150000,150000,150000,150000,150000,150000,150000,150000],
+    jinken2:[0,0,0,0,0,0,0,0,0,0,0,0],
+    jinken3:[15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000],
+    komon:[52000,52000,52000,52000,34000,34000,34000,34000,34000,34000,34000,34000],
+    yachin:[44000,44000,44000,44000,44000,0,0,0,0,0,0,0],
+    car:[45000,45000,45000,45000,37000,36000,36000,36000,36000,36000,36000,36000],
+    kokoku:[0,0,0,40000,0,0,0,0,0,0,0,0],
+  }
+};
+
+/* ─── Auth ─── */
+function tryLogin(){
+  const v = document.getElementById('pw-input').value;
+  if(v===PASSWORD){
+    sessionStorage.setItem('flux_sales_auth','1');
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    initApp();
+  } else {
+    document.getElementById('login-err').textContent='パスワードが違います';
+    document.getElementById('pw-input').value='';
+    document.getElementById('pw-input').focus();
+  }
+}
+document.getElementById('pw-input').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin();});
+function logout(){sessionStorage.removeItem('flux_sales_auth');location.reload();}
+if(sessionStorage.getItem('flux_sales_auth')==='1'){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.add('visible');
+  initApp();
+}
+
+/* ─── Data ─── */
+function loadData(){
+  const raw=localStorage.getItem(STORAGE_KEY);
+  if(raw) return JSON.parse(raw);
+  const d=JSON.parse(JSON.stringify(PRESET));
+  saveData(d); return d;
+}
+function saveData(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));}
+function getData(){return loadData();}
+
+function calcTotal(arr){return arr.reduce((s,v)=>s+(+v||0),0);}
+function calcCosts(d,mi){return COST_ROWS.reduce((s,r)=>s+(+d[r.key][mi]||0),0);}
+function calcProfit(d,mi){return (+d.revenue[mi]||0)-calcCosts(d,mi);}
+function calcRate(d,mi){const r=+d.revenue[mi]||0;return r>0?calcProfit(d,mi)/r*100:0;}
+
+/* ─── Utils ─── */
+const gc='rgba(0,0,0,0.06)',tc='#9b9a95';
+Chart.defaults.font.family="'Noto Sans JP',sans-serif";
+Chart.defaults.font.size=11; Chart.defaults.color=tc;
+const charts={};
+function dc(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function fmtW(v){const a=Math.abs(Math.round(v/10000));return (v<0?'△':'')+a.toLocaleString()+'万';}
+function fmtM(v){return Math.round(Math.abs(v)/10000).toLocaleString()+'万';}
+
+let currentDashYear=null;
+let currentEntryYear=null;
+
+/* ─── Init ─── */
+function initApp(){
+  const years=Object.keys(getData()).sort((a,b)=>b-a);
+  currentDashYear=years[0];
+  currentEntryYear=years[0];
+  renderDashboard();
+}
+
+/* ─── Navigation ─── */
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.page-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='dashboard') renderDashboard();
+  if(id==='entry') renderEntry();
+  if(id==='compare') renderCompare();
+}
+
+/* ════════════════════════════════
+   DASHBOARD
+════════════════════════════════ */
+function renderDashboard(){
+  const data=getData();
+  const years=Object.keys(data).sort((a,b)=>b-a);
+  if(!currentDashYear||!data[currentDashYear]) currentDashYear=years[0];
+  const d=data[currentDashYear];
+
+  const totalRev=calcTotal(d.revenue);
+  const totalCost=COST_ROWS.reduce((s,r)=>s+calcTotal(d[r.key]),0);
+  const totalProfit=totalRev-totalCost;
+  const avgMonthly=Math.round(totalRev/12);
+  const bestMonth=d.revenue.indexOf(Math.max(...d.revenue));
+  const profitRate=totalRev>0?totalProfit/totalRev*100:0;
+
+  const yearBtns=years.map(y=>
+    `<button class="year-btn${y===currentDashYear?' active':''}" onclick="currentDashYear='${y}';renderDashboard()">${y}年</button>`
+  ).join('');
+
+  document.getElementById('page-dashboard').innerHTML=`
+  <div class="section" style="margin-top:1rem">
+    <div class="year-bar">
+      <span class="year-label">表示年度：</span>
+      ${yearBtns}
+    </div>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">年間売上高</div>
+        <div class="kpi-value">${Math.round(totalRev/10000).toLocaleString()}万円</div>
+        <div class="kpi-sub">${currentDashYear}年合計</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">月平均売上</div>
+        <div class="kpi-value">${Math.round(avgMonthly/10000).toLocaleString()}万円</div>
+        <div class="kpi-sub">12ヶ月平均</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">年間粗利</div>
+        <div class="kpi-value ${totalProfit>=0?'pos':'neg'}">${fmtW(totalProfit)}円</div>
+        <div class="kpi-sub">売上 − 全費用</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">粗利率</div>
+        <div class="kpi-value ${profitRate>=0?'pos':'neg'}">${profitRate>=0?'+':''}${profitRate.toFixed(1)}%</div>
+        <div class="kpi-sub">年間通算</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">最高売上月</div>
+        <div class="kpi-value">${MONTHS[bestMonth]}</div>
+        <div class="kpi-sub">${fmtM(d.revenue[bestMonth])}円</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend">
+        <span class="legend-item"><span class="ls" style="background:#378ADD"></span>売上高</span>
+        <span class="legend-item"><span class="ls" style="background:#D85A30"></span>費用合計</span>
+        <span class="legend-item"><span class="ls" style="background:#1D9E75"></span>粗利（正）</span>
+        <span class="legend-item"><span class="ls" style="background:#F7C1C1"></span>粗利（負）</span>
+      </div>
+      <div class="chart-wrap-tall"><canvas id="mainChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text2)">月別 粗利率（%）</div>
+      <div class="chart-wrap"><canvas id="rateChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text2)">費用内訳（年間合計）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="chart-wrap" style="height:220px"><canvas id="costPieChart"></canvas></div>
+        <div id="costBreakdown" style="font-size:12px;display:flex;flex-direction:column;gap:6px;justify-content:center"></div>
+      </div>
+    </div>
+  </div>`;
+
+  /* Main bar chart */
+  const profits=MONTHS.map((_,i)=>calcProfit(d,i));
+  const costs=MONTHS.map((_,i)=>calcCosts(d,i));
+  dc('mainChart');
+  charts['mainChart']=new Chart(document.getElementById('mainChart'),{
+    type:'bar',
+    data:{labels:MONTHS, datasets:[
+      {label:'売上高',data:d.revenue.map(v=>+v||0),backgroundColor:'#378ADD',borderRadius:3,borderSkipped:false,order:2},
+      {label:'費用合計',data:costs,backgroundColor:'#D85A30',borderRadius:3,borderSkipped:false,order:3},
+      {label:'粗利',data:profits,backgroundColor:profits.map(v=>v>=0?'#1D9E75':'#F7C1C1'),borderRadius:3,borderSkipped:false,order:1},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtW(c.parsed.y)+'円'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>Math.round(v/10000)+'万'}}}
+    }
+  });
+
+  /* Rate chart */
+  const rates=MONTHS.map((_,i)=>+calcRate(d,i).toFixed(1));
+  dc('rateChart');
+  charts['rateChart']=new Chart(document.getElementById('rateChart'),{
+    type:'bar',
+    data:{labels:MONTHS,datasets:[{
+      label:'粗利率',data:rates,
+      backgroundColor:rates.map(v=>v>=0?'rgba(29,158,117,0.7)':'rgba(242,75,74,0.7)'),
+      borderRadius:3
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toFixed(1)+'%'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>v+'%'}}}
+    }
+  });
+
+  /* Cost pie */
+  const costTotals=COST_ROWS.map(r=>calcTotal(d[r.key]));
+  const pieColors=['#378ADD','#D85A30','#1D9E75','#BA7517','#7F77DD','#D4537E','#888780','#E24B4A','#59B89F','#F0A500'];
+  dc('costPieChart');
+  charts['costPieChart']=new Chart(document.getElementById('costPieChart'),{
+    type:'doughnut',
+    data:{labels:COST_ROWS.map(r=>r.label),datasets:[{data:costTotals,backgroundColor:pieColors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.label+': '+Math.round(c.parsed/10000).toLocaleString()+'万円'}}}
+    }
+  });
+
+  const bd=document.getElementById('costBreakdown');
+  const totalCostSum=costTotals.reduce((s,v)=>s+v,0);
+  bd.innerHTML=COST_ROWS.map((r,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span style="display:flex;align-items:center;gap:6px;color:var(--text2)">
+        <span style="width:8px;height:8px;border-radius:2px;background:${pieColors[i]};flex-shrink:0"></span>${r.label}
+      </span>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;">${Math.round(costTotals[i]/10000).toLocaleString()}万
+        <span style="color:var(--text3)">(${totalCostSum>0?(costTotals[i]/totalCostSum*100).toFixed(0):0}%)</span>
+      </span>
+    </div>`).join('');
+}
+
+/* ════════════════════════════════
+   ENTRY
+════════════════════════════════ */
+function renderEntry(){
+  const data=getData();
+  const years=Object.keys(data).sort((a,b)=>b-a);
+  if(!currentEntryYear||!data[currentEntryYear]) currentEntryYear=years[0];
+  const d=data[currentEntryYear];
+
+  const yearBtns=years.map(y=>
+    `<button class="year-btn${y===currentEntryYear?' active':''}" onclick="currentEntryYear='${y}';renderEntry()">${y}年</button>`
+  ).join('');
+
+  /* build header */
+  const monthHeaders=MONTHS.map(m=>`<th>${m}</th>`).join('');
+  /* revenue row */
+  const revenueInputs=MONTHS.map((_,i)=>
+    `<td><input type="number" id="e_revenue_${i}" value="${d.revenue[i]||0}" oninput="recalcEntry()"></td>`
+  ).join('');
+  /* cost rows */
+  const costRowsHtml=COST_ROWS.map(r=>`
+    <tr>
+      <td class="row-label-cost">${r.label}</td>
+      ${MONTHS.map((_,i)=>`<td><input type="number" id="e_${r.key}_${i}" value="${d[r.key][i]||0}" oninput="recalcEntry()"></td>`).join('')}
+    </tr>`).join('');
+  /* profit row (read-only, updated by JS) */
+  const profitCells=MONTHS.map((_,i)=>`<td class="calc-cell" id="ep_${i}">—</td>`).join('');
+  const rateCells=MONTHS.map((_,i)=>`<td class="calc-cell" id="er_${i}">—</td>`).join('');
+  const totalRevCell=`<td class="calc-cell" id="et_rev">—</td>`;
+  const totalProfitCell=`<td class="calc-cell" id="et_profit">—</td>`;
+  const costTotalCells=MONTHS.map((_,i)=>`<td class="calc-cell" id="ect_${i}">—</td>`).join('');
+
+  document.getElementById('page-entry').innerHTML=`
+  <div class="section" style="margin-top:1rem">
+    <div class="year-bar">
+      <span class="year-label">編集年度：</span>
+      ${yearBtns}
+      <button class="btn-add-year" onclick="addYear()">＋ 年度追加</button>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div class="entry-table-wrap">
+        <table class="entry-table">
+          <thead>
+            <tr><th>項目</th>${monthHeaders}<th style="background:var(--border)">合計</th></tr>
+          </thead>
+          <tbody>
+            <tr class="revenue">
+              <td>売上高</td>${revenueInputs}${totalRevCell}
+            </tr>
+            ${costRowsHtml}
+            <tr>
+              <td>費用合計</td>${costTotalCells}<td class="calc-cell" id="et_cost">—</td>
+            </tr>
+            <tr class="profit">
+              <td>粗利</td>${profitCells}${totalProfitCell}
+            </tr>
+            <tr>
+              <td>粗利率</td>${rateCells}<td class="calc-cell" id="et_rate">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="action-bar">
+        <button class="btn-save" onclick="saveEntry()">保存する</button>
+        <span class="save-msg" id="save-msg">保存しました ✓</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">数値は円単位で入力してください</span>
+      </div>
+    </div>
+  </div>`;
+
+  recalcEntry();
+}
+
+function recalcEntry(){
+  const fmt=v=>{
+    const a=Math.round(Math.abs(v)/10000);
+    const el_str=(v<0?'△':'')+a.toLocaleString()+'万';
+    return {str:el_str,pos:v>=0};
+  };
+  let totalRev=0,totalCost=0,totalProfit=0;
+  MONTHS.forEach((_,i)=>{
+    const rev=+document.getElementById(`e_revenue_${i}`)?.value||0;
+    const cost=COST_ROWS.reduce((s,r)=>s+(+document.getElementById(`e_${r.key}_${i}`)?.value||0),0);
+    const profit=rev-cost;
+    const rate=rev>0?profit/rev*100:0;
+    totalRev+=rev; totalCost+=cost; totalProfit+=profit;
+
+    /* cost total per month */
+    const ect=document.getElementById(`ect_${i}`);
+    if(ect) ect.textContent=Math.round(cost/10000).toLocaleString()+'万';
+
+    const ep=document.getElementById(`ep_${i}`);
+    if(ep){const f=fmt(profit);ep.textContent=f.str;ep.className='calc-cell '+(f.pos?'pos':'neg');}
+    const er=document.getElementById(`er_${i}`);
+    if(er){er.textContent=(rate>=0?'+':'')+rate.toFixed(1)+'%';er.className='calc-cell '+(rate>=0?'pos':'neg');}
+  });
+  const tr=document.getElementById('et_rev');
+  if(tr) tr.textContent=Math.round(totalRev/10000).toLocaleString()+'万';
+  const tc2=document.getElementById('et_cost');
+  if(tc2) tc2.textContent=Math.round(totalCost/10000).toLocaleString()+'万';
+  const tp=document.getElementById('et_profit');
+  if(tp){const f=fmt(totalProfit);tp.textContent=f.str;tp.className='calc-cell '+(f.pos?'pos':'neg');}
+  const trate=totalRev>0?totalProfit/totalRev*100:0;
+  const tr2=document.getElementById('et_rate');
+  if(tr2){tr2.textContent=(trate>=0?'+':'')+trate.toFixed(1)+'%';tr2.className='calc-cell '+(trate>=0?'pos':'neg');}
+}
+
+function saveEntry(){
+  const data=getData();
+  const d=data[currentEntryYear];
+  MONTHS.forEach((_,i)=>{
+    d.revenue[i]=+document.getElementById(`e_revenue_${i}`)?.value||0;
+    COST_ROWS.forEach(r=>{d[r.key][i]=+document.getElementById(`e_${r.key}_${i}`)?.value||0;});
+  });
+  saveData(data);
+  const msg=document.getElementById('save-msg');
+  msg.classList.add('show');
+  setTimeout(()=>msg.classList.remove('show'),2000);
+}
+
+function addYear(){
+  const y=prompt('追加する年度を入力（例：2027）');
+  if(!y||!/^\d{4}$/.test(y.trim())){alert('4桁の年度を入力してください');return;}
+  const data=getData();
+  if(data[y]){alert('その年度は既に存在します');return;}
+  data[y]={revenue:Array(12).fill(0)};
+  COST_ROWS.forEach(r=>{data[y][r.key]=Array(12).fill(0);});
+  saveData(data);
+  currentEntryYear=y;
+  renderEntry();
+}
+
+/* ════════════════════════════════
+   COMPARE
+════════════════════════════════ */
+function renderCompare(){
+  const data=getData();
+  const years=Object.keys(data).sort();
+  const colors=['#378ADD','#D85A30','#1D9E75','#BA7517','#7F77DD'];
+
+  document.getElementById('page-compare').innerHTML=`
+  <div class="section" style="margin-top:1rem">
+    <div class="card">
+      <div class="legend">
+        ${years.map((y,i)=>`<span class="legend-item"><span class="ls" style="background:${colors[i%colors.length]}"></span>${y}年</span>`).join('')}
+      </div>
+      <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">月別売上高（年度比較）</div>
+      <div class="chart-wrap-tall"><canvas id="cmpRevChart"></canvas></div>
+    </div>
+    <div class="compare-grid">
+      <div class="card">
+        <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">月別粗利率（年度比較）</div>
+        <div class="chart-wrap"><canvas id="cmpRateChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">年間サマリー比較</div>
+        <div id="cmpSummary"></div>
+      </div>
+    </div>
+  </div>`;
+
+  /* Revenue compare */
+  dc('cmpRevChart');
+  charts['cmpRevChart']=new Chart(document.getElementById('cmpRevChart'),{
+    type:'bar',
+    data:{labels:MONTHS,datasets:years.map((y,i)=>({
+      label:y+'年',data:(data[y].revenue||[]).map(v=>+v||0),
+      backgroundColor:colors[i%colors.length]+'99',
+      borderColor:colors[i%colors.length],borderWidth:1,borderRadius:2
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmtW(c.parsed.y)+'円'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>Math.round(v/10000)+'万'}}}
+    }
+  });
+
+  /* Rate compare */
+  dc('cmpRateChart');
+  charts['cmpRateChart']=new Chart(document.getElementById('cmpRateChart'),{
+    type:'line',
+    data:{labels:MONTHS,datasets:years.map((y,i)=>({
+      label:y+'年',
+      data:MONTHS.map((_,mi)=>+calcRate(data[y],mi).toFixed(1)),
+      borderColor:colors[i%colors.length],backgroundColor:'transparent',
+      tension:0.3,pointRadius:3,borderWidth:2
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}},
+      scales:{x:{grid:{color:gc},ticks:{color:tc}},y:{grid:{color:gc},ticks:{color:tc,callback:v=>v+'%'}}}
+    }
+  });
+
+  /* Summary table */
+  const smry=document.getElementById('cmpSummary');
+  smry.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr>
+      <th style="text-align:left;padding:6px 4px;border-bottom:.5px solid var(--border);color:var(--text3)">年度</th>
+      <th style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);color:var(--text3)">売上合計</th>
+      <th style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);color:var(--text3)">粗利合計</th>
+      <th style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);color:var(--text3)">粗利率</th>
+    </tr></thead>
+    <tbody>${years.map((y,i)=>{
+      const d=data[y];
+      const rev=calcTotal(d.revenue);
+      const cost=COST_ROWS.reduce((s,r)=>s+calcTotal(d[r.key]),0);
+      const profit=rev-cost;
+      const rate=rev>0?profit/rev*100:0;
+      return `<tr>
+        <td style="padding:6px 4px;border-bottom:.5px solid var(--border)">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${colors[i%colors.length]};margin-right:6px"></span>${y}年
+        </td>
+        <td style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);font-family:'IBM Plex Mono',monospace">${Math.round(rev/10000).toLocaleString()}万</td>
+        <td style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);font-family:'IBM Plex Mono',monospace;color:${profit>=0?'var(--blue)':'var(--red)'}">${fmtW(profit)}円</td>
+        <td style="text-align:right;padding:6px 4px;border-bottom:.5px solid var(--border);color:${rate>=0?'var(--blue)':'var(--red)'}">${rate>=0?'+':''}${rate.toFixed(1)}%</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+</script>
+</body>
+</html>
